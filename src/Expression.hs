@@ -683,23 +683,28 @@ encodeNegation state rules = concat |> map negationClauses allAtoms
 
 getDeclarations :: [Statement] -> [Declaration]
 getDeclarations statements = []
-getDeclarations (Dec d):statements = d:(getDeclarations statements)
-getDeclarations _:statements = getDeclarations statements
+getDeclarations ((Dec d):statements) = d:(getDeclarations statements)
+getDeclarations (_:statements) = getDeclarations statements
 
-getRules :: [Statement] -> [Formuala]
+getRules :: [Statement] -> [Formula]
 getRules statements = []
-getRules (For f):statements = f:(getRules statements)
-getRules _:statements = getRules statements
+getRules ((For f):statements) = f:(getRules statements)
+getRules (_:statements) = getRules statements
+
+programState :: [Statement] -> State
+programState program = getState |> getDeclarations |> program
 
 --------------------------------------------------------------------------------------
 
 getGamma :: [Statement] -> [Formula]
-getGamma program = []
+getGamma program = unfoldInstance state rules
     where
-        state = []
+        state = programState program
+        rules = getRules program
 
-getModels :: [Formula] -> [[Formula]]
-getModels = []
+---------------------------------------------------------------------------------------
+
+
 
 ---------------------------------------------------------------------------------------------------------------
 -- Errors and Warnings ----------------------------------------------------------------------------------------
