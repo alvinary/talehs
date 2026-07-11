@@ -682,12 +682,12 @@ encodeNegation state rules = concat |> map negationClauses allAtoms
 --------------------------------------------------------------------------------------
 
 getDeclarations :: [Statement] -> [Declaration]
-getDeclarations statements = []
+getDeclarations [] = []
 getDeclarations ((Dec d):statements) = d:(getDeclarations statements)
 getDeclarations (_:statements) = getDeclarations statements
 
 getRules :: [Statement] -> [Formula]
-getRules statements = []
+getRules [] = []
 getRules ((For f):statements) = f:(getRules statements)
 getRules (_:statements) = getRules statements
 

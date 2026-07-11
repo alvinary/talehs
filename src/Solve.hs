@@ -1,5 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
+module Solve where
+
 import SAT.MiniSat
 import qualified Expression
 import qualified Data.Map as Map
