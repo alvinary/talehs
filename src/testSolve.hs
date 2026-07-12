@@ -4,6 +4,7 @@ import Reader
 import Parser
 import qualified Data.Text as Text
 import qualified Data.Map as Map
+import qualified Data.List as List
 
 parse text = head $ Reader.read $ Parser.tokenize $ Text.pack $ text
 
@@ -40,7 +41,10 @@ checkFunctions functionDeclaration functionName state = allInDomain && boundsFor
         allInDomain = False
         boundsForbidden = False 
 
-simpleDeclarations = [abcConstants, xyVars]
+stato = getState $ map parseDeclaration simpleDeclarations
+funs = Expression.functions $ getState $ map parseDeclaration simpleDeclarations
+
+simpleDeclarations = [abcConstants, xyVars,  "let g : A ; A -> A"]
 simpleRules = ["r(x, y), r(y, z) -> r(x, z)", "r(x, y), r(y, x) -> False"]
 simpleFormulas = map parseRule simpleRules
 
@@ -53,4 +57,8 @@ simpleProgram = map fromDeclaration simpleDeclarations ++ map fromFormula simple
         fromDeclaration d = Dec $ parseDeclaration d
         fromFormula f = For $ parseRule f
 
-woochi = Solve.getModels simpleProgram 20
+wukong = Expression.getGamma simpleProgram
+
+woochi = Expression.showSeveral $ map showPositive $ Solve.getModels simpleProgram 20
+    where
+        showPositive m = filter (\x -> not(List.isInfixOf "¬" $ show x)) $ map (\(x, y) -> x) $ filter (\(x, y) -> y == True) $ Map.toList m
