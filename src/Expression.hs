@@ -481,7 +481,7 @@ addTotalOrder prefix size sort state = state { members = newMembers, values = ne
         next = Leaf "next"
 
 addFunction :: Term -> [Term] -> Term -> State -> State
-addFunction f domain image state = state { images = newImages, domains = newDomains }
+addFunction f domain image state = state { images = newImages, domains = newDomains, functions = newFunctions }
     where
         newImages = Dict.insert f image (images state)
         newDomains = Dict.insert f domain (domains state)
