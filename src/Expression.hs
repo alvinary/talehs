@@ -565,11 +565,12 @@ bitConstraints :: Term -> [Term] -> Int -> [Formula]
 bitConstraints f args m = concat |> map bitFormulas bitIndices
     where
         bitFormulas index = eitherFrom (bitPredicate index valueZero) (bitPredicate index valueOne)
-        bitIndices = map (\i -> Leaf |> show i) [1..m] -- TODO: oboe
+        bitIndices = map (\i -> Leaf |> show i) [1..logM] -- TODO: oboe
         indexTerm index = Index (Leaf "bits") [f, index]
         valueZero = [(Leaf "zero")]
         valueOne = [(Leaf "one")]
         bitPredicate bitIndex bitValue = Positive |> Relation (indexTerm bitIndex) (args ++ bitValue)
+        logM = logTwoCeiling m
 
 -- `from` is the first forbidden value, `to` is the last
 
