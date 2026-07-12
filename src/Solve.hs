@@ -6,7 +6,7 @@ import SAT.MiniSat
 import qualified Expression
 import qualified Data.Map as Map
 
-getLiteral :: Expression.Conjunction ->Expression.Literal
+getLiteral :: Expression.Conjunction -> Expression.Literal
 getLiteral (Expression.Mono l) = l
 getLiteral _ = error "Cannot extract literals from non-mono conjunct"
 
@@ -19,6 +19,13 @@ toLiterals (Expression.Implication hs cs) = map clausify $ map getLiteral cs
     where
         clausify literal = (hypo, [literal])
         hypo = map getLiteral hs
+
+orAll :: [Formula Expression.Literal] -> Formula Expression.Literal
+orAll [] = No
+orAll (f:fs) = f :||: orAll fs
+
+conjAll [] = Yes
+conjAll (f:fs) = f :&&: conjAll fs
 
 asMinisat :: ([Expression.Literal], [Expression.Literal]) -> Formula Expression.Literal
 asMinisat (negatives, positives) = Some (allNegatives ++ allPositives)
