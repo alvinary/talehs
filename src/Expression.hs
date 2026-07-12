@@ -667,7 +667,7 @@ encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListC
         encodeF f = encodeFunction f (getDomain f) (getImage f)
         sortMembers s = Dict.findWithDefault [] s (members state)
         getImage f = sortMembers |> Dict.findWithDefault (Leaf "") f (images state)
-        getDomain f = map sortMembers |> Dict.findWithDefault [] f (domains state)
+        getDomain f = sequence |> map sortMembers |> Dict.findWithDefault [] f (domains state)
 
 encodeNegation :: State -> [Formula] -> [Formula]
 encodeNegation state rules = concat |> map negationClauses allAtoms
