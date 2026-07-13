@@ -408,13 +408,15 @@ space = T.pack " "
 removeReserved :: String -> String
 removeReserved text = T.unpack |>  T.replace colonSymbol space |> T.replace leftSquare space |> T.replace rightSquare space |> T.replace dotSymbol space |> T.pack text
 
+-- lala => [(t1, t2)] => deps
+
 sampleDeclarations = [
-    words |> removeReserved "a b", --"var x : A",
-    words |> removeReserved "c d ", --"var t[x] : Type[x]",
-    words |> removeReserved "a d", --"order vertex n : A",
-    words |> removeReserved "d e", --"order vertex[x] m : Type[x]",
-    words |> removeReserved "f e", --"let x.type = Type[x].first",
-    words |> removeReserved "a g" -- "params m n"
+    words |> removeReserved "A x",  --"var x : A",
+    words |> removeReserved "x d ", --"var t[x] : Type[x]",
+    words |> removeReserved "a d",  --"order vertex n : A",
+    words |> removeReserved "d e",  --"order vertex[x] m : Type[x]",
+    words |> removeReserved "f e",  --"let x.type = Type[x].first",
+    words |> removeReserved "a g"   -- "params m n"
     ]
 
 termDependencies :: String -> [[String]] -> Set String
@@ -466,7 +468,12 @@ stateUpdate (Variable ts t) state = state { ranges = split (massFlatten ts) t (r
 stateUpdate (Order prefix size sort) state = addTotalOrder prefix size sort state
 stateUpdate (Function f domain image) state = addFunction f domain image state
 stateUpdate (Assignment (Attribute t f) s) state = state { values = Dict.insert (t, f) s (values state) }
+stateUpdate (Parameters ts) state = state { parameters = Map.fromList |> getParameters ts }
 stateUpdate _ state = error "Undefined state update"
+
+-- Parameters with default values
+-- Parameters with terminal values
+-- Binding parameters to sort values
 
 addTotalOrder :: Term -> Term -> Term -> State -> State
 addTotalOrder prefix size sort state = state { members = newMembers, values = newValues }
@@ -489,7 +496,6 @@ addFunction f domain image state = state { images = newImages, domains = newDoma
 
 -- If a term has an interpretation as an integer (it is either a sequence of digits or a parameter),
 -- return that integer. Otherwise, raise an exception.
-
 asSize :: Term -> State -> Int
 asSize (Leaf a) state | isSequenceOfDigits a = read a
 asSize term state | Dict.member term (parameters state) = Dict.findWithDefault 0 term (parameters state)
@@ -520,8 +526,8 @@ encodeFunction functionName domain image = encodeValues ++ encodeBounds
         encodeValues = concat |> map (\args -> encodeDomainElement functionName args image) domain
         encodeBounds = forbidOffBounds functionName firstOffBounds lastOffBounds domain imageSize -- TODO: los nombres están swappeados
         imageSize = length image
-        firstOffBounds = imageSize                   -- TODO: Oboe
-        lastOffBounds = 2 ^ (logTwoCeiling imageSize) -- TODO: Oboe. eso, o eso +1, o eso -1?
+        firstOffBounds = imageSize                    -- TODO: Oboe
+        lastOffBounds = 2 ^ (logTwoCeiling imageSize) -- TODO: Oboe. eso, eso +1, o eso -1?
         
 encodeDomainElement :: Term -> [Term] -> [Term] -> [Formula]
 encodeDomainElement functionName arguments image = encodeBits ++ encodeAssignment
@@ -573,7 +579,6 @@ bitConstraints f args m = concat |> map bitFormulas bitIndices
         logM = logTwoCeiling m
 
 -- `from` is the first forbidden value, `to` is the last
-
 forbidOffBounds :: Term -> Int -> Int -> [[Term]] -> Int -> [Formula]
 forbidOffBounds f from to domain imageSize = [forbidIndexBits f elem index imageSize | elem <- domain, index <- [from..to]]
 
@@ -590,7 +595,6 @@ enn n (x:xs) = (n, x):(enn (n + 1) xs)
 ------------------------------------------------------------------------------------------
 
 -- Encode the xor of two literals as a list of formulas
-
 eitherFrom :: Literal -> Literal -> [Formula]
 eitherFrom phi psi = [Disjunction both, Contradiction both]
     where
@@ -704,8 +708,6 @@ getGamma program = unfoldInstance state rules
         rules = getRules program
 
 ---------------------------------------------------------------------------------------
-
-
 
 ---------------------------------------------------------------------------------------------------------------
 -- Errors and Warnings ----------------------------------------------------------------------------------------
