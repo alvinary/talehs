@@ -468,7 +468,7 @@ stateUpdate (Variable ts t) state = state { ranges = split (massFlatten ts) t (r
 stateUpdate (Order prefix size sort) state = addTotalOrder prefix size sort state
 stateUpdate (Function f domain image) state = addFunction f domain image state
 stateUpdate (Assignment (Attribute t f) s) state = state { values = Dict.insert (t, f) s (values state) }
-stateUpdate (Parameters ts) state = state { parameters = Map.fromList |> getParameters ts }
+-- stateUpdate (Parameters ts) state = state { parameters = Dict.fromList |> getParameters ts }
 stateUpdate _ state = error "Undefined state update"
 
 -- Parameters with default values
