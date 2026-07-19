@@ -33,7 +33,7 @@ orderCaseB = "order p 15 : A"
 
 lolo = checkOrder orderCase 25 "A"
 
-abcConstants = "const a, b, c, d, e, f : A"
+abcConstants = "const a, b, c, d, e : A"
 xyVars = "var x, y, z : A"
 
 checkFunctions functionDeclaration functionName state = allInDomain && boundsForbidden
@@ -44,7 +44,7 @@ checkFunctions functionDeclaration functionName state = allInDomain && boundsFor
 stato = getState $ map parseDeclaration simpleDeclarations
 funs = Expression.functions $ getState $ map parseDeclaration simpleDeclarations
 
-simpleDeclarations = [abcConstants, xyVars,  "let g : A -> A", "let h : A ; A -> A"]
+simpleDeclarations = [abcConstants, xyVars,  "let g : A -> A"]
 simpleRules = ["r(x, y), r(y, z) -> r(x, z)", "r(x, y), r(y, x) -> False"]
 simpleFormulas = map parseRule simpleRules
 
@@ -57,7 +57,7 @@ simpleProgram = map fromDeclaration simpleDeclarations ++ map fromFormula simple
         fromDeclaration d = Dec $ parseDeclaration d
         fromFormula f = For $ parseRule f
 
-wukong = Expression.getGamma simpleProgram
+wukong = List.intercalate "; \n" $ map show $ Expression.getGamma simpleProgram
 
 woochi = Expression.showSeveral $ map showPositive $ Solve.getModels simpleProgram 20
     where
