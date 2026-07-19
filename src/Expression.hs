@@ -559,11 +559,12 @@ elementBits f elem n max = map bitAtom |> zip elementBits [0..w]
 -- TODO: Should this be 'just' the conjunct, or also a formulas for 'wrong bit -> not this value'?
 --       Like, for all i, bit [f, i] (arts, b.bits[i].flip) -> not f (args, b).
 valueFormulas :: Term -> [Term] -> Term -> Int -> Int -> [Formula]
-valueFormulas f as b i m = [Implication bitsConjunct valueConjunct, Implication valueConjunct bitsConjunct]
+valueFormulas f as b i m = [Implication bitsConjunct valueConjunct, Implication valueConjunct bitsConjunct] ++ atomOrNot
     where
         valueAtom = Relation f |> as ++ [b]
         valueConjunct = [Mono |> Positive |> valueAtom]
         bitsConjunct = (elementBits f as i m)
+        atomOrNot = eitherFrom (Negative |> valueAtom) (Positive |> valueAtom)
 
 -- `bitConstraints` ensures each tuple in the domain has either zero or one as value for each bit
 -- These are necessary just once per domain element, not per `(domain element, image element)` pair 
