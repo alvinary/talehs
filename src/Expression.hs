@@ -38,7 +38,7 @@ equalityComparison = Leaf "="
 -------------------------------------------------------------------------------------------
 
 showSeveral :: Show a => [[a]] -> String
-showSeveral xss = intercalate " " (map show xss)
+showSeveral xss = intercalate "; \n" (map show xss)
 
 showInLines xs = putStrLn |> intercalate "\n" (map show xs)
 
@@ -555,7 +555,7 @@ elementBits f elem n max = map bitAtom |> zip elementBits [0..w]
         fBitsPredicate i = Index bitsTerm [f, indexTerm i]
         elementArguments = elem ++ elementBits
         bitsTerm = Leaf "bits"
-        indexTerm i = Leaf |> "i" ++ show i
+        indexTerm i = Leaf |> show i
         elementBits = padding ++ (map (\x -> Leaf |> show x) |> binaryDigits n)
         w = logTwoCeiling max
         paddingSize = w - (length |> binaryDigits n)
