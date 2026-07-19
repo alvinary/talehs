@@ -523,7 +523,7 @@ uniqueNameAssumption terms = concat |> map unaFormula |> sequence [terms, terms]
 encodeFunction :: Term -> [[Term]] -> [Term] -> [Formula]
 encodeFunction functionName domain image = encodeValues ++ encodeBounds 
     where
-        encodeValues = concat |> (map (\args -> encodeDomainElement functionName args image) domain `using` parListChunk 4 rdeepseq)
+        encodeValues = concat |> (map (\args -> encodeDomainElement functionName args image) domain `using` parListChunk 1000 rdeepseq)
         encodeBounds = forbidOffBounds functionName firstOffBounds lastOffBounds domain imageSize -- TODO: los nombres están swappeados
         imageSize = length image
         firstOffBounds = imageSize                    -- TODO: Oboe
@@ -636,7 +636,7 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 --------------------------------------------------------------------------------------------------------------
 
 groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [a]
-groundingStep expression ranges variables = map bind allAssignments `using` parListChunk 4 rdeepseq
+groundingStep expression ranges variables = map bind allAssignments `using` parListChunk 1000 rdeepseq
     where
         bind b = replace expression b
         allAssignments = assignments expression ranges variables
