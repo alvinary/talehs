@@ -52,12 +52,6 @@ binaryDigits n = map readDigit (showBin n "")
         readDigit d | d == '0' = 0
         readDigit d | d > '0' = 1
 
-flippedBinaryDigits :: Int -> [Int]
-flippedBinaryDigits n = map readDigit (showBin n "")
-    where
-        readDigit d | d == '0' = 1
-        readDigit d | d > '0' = 0
-
 -- Minimum b such that 2**b >= n
 logTwoCeiling :: Int -> Int
 logTwoCeiling n = ceiling |> logBase 2 (fromIntegral n)
