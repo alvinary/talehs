@@ -52,6 +52,12 @@ binaryDigits n = map readDigit (showBin n "")
         readDigit d | d == '0' = 0
         readDigit d | d > '0' = 1
 
+flippedBinaryDigits :: Int -> [Int]
+flippedBinaryDigits n = map readDigit (showBin n "")
+    where
+        readDigit d | d == '0' = 1
+        readDigit d | d > '0' = 0
+
 -- Minimum b such that 2**b >= n
 logTwoCeiling :: Int -> Int
 logTwoCeiling n = ceiling |> logBase 2 (fromIntegral n)
@@ -574,14 +580,15 @@ bitConstraints f args m = concat |> map bitFormulas bitIndices
         bitFormulas index = eitherFrom (bitPredicate index valueZero) (bitPredicate index valueOne)
         bitIndices = map (\i -> Leaf |> show i) [1..logM] -- TODO: oboe
         indexTerm index = Index (Leaf "bits") [f, index]
-        valueZero = [(Leaf "zero")]
-        valueOne = [(Leaf "one")]
+        valueZero = [(Leaf "0")]
+        valueOne = [(Leaf "1")]
         bitPredicate bitIndex bitValue = Positive |> Relation (indexTerm bitIndex) (args ++ bitValue)
         logM = logTwoCeiling m
 
 -- `from` is the first forbidden value, `to` is the last
 forbidOffBounds :: Term -> Int -> Int -> [[Term]] -> Int -> [Formula]
 forbidOffBounds f from to domain imageSize = [forbidIndexBits f elem index imageSize | elem <- domain, index <- [from..to]]
+        
 
 ------------------------------------------------------------------------------------------
 
