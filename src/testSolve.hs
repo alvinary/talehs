@@ -44,7 +44,7 @@ checkFunctions functionDeclaration functionName state = allInDomain && boundsFor
 stato = getState $ map parseDeclaration simpleDeclarations
 funs = Expression.functions $ getState $ map parseDeclaration simpleDeclarations
 
-simpleDeclarations = [abcConstants, xyVars,  "let g : A ; A -> A"]
+simpleDeclarations = [abcConstants, xyVars,  "let g : A -> A", "let h : A ; A -> A"]
 simpleRules = ["r(x, y), r(y, z) -> r(x, z)", "r(x, y), r(y, x) -> False"]
 simpleFormulas = map parseRule simpleRules
 

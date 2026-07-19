@@ -38,7 +38,7 @@ equalityComparison = Leaf "="
 -------------------------------------------------------------------------------------------
 
 showSeveral :: Show a => [[a]] -> String
-showSeveral xss = intercalate " " (map show xss)
+showSeveral xss = intercalate "; \n" (map show xss)
 
 showInLines xs = putStrLn |> intercalate "\n" (map show xs)
 
@@ -468,7 +468,7 @@ stateUpdate (Variable ts t) state = state { ranges = split (massFlatten ts) t (r
 stateUpdate (Order prefix size sort) state = addTotalOrder prefix size sort state
 stateUpdate (Function f domain image) state = addFunction f domain image state
 stateUpdate (Assignment (Attribute t f) s) state = state { values = Dict.insert (t, f) s (values state) }
-stateUpdate (Parameters ts) state = state { parameters = Map.fromList |> getParameters ts }
+-- stateUpdate (Parameters ts) state = state { parameters = Dict.fromList |> getParameters ts }
 stateUpdate _ state = error "Undefined state update"
 
 -- Parameters with default values
@@ -521,9 +521,9 @@ uniqueNameAssumption terms = concat |> map unaFormula |> sequence [terms, terms]
 -- Encode a function (a relation that's injective and surjective)
 
 encodeFunction :: Term -> [[Term]] -> [Term] -> [Formula]
-encodeFunction functionName domain image = encodeValues ++ encodeBounds
+encodeFunction functionName domain image = encodeValues ++ encodeBounds 
     where
-        encodeValues = concat |> map (\args -> encodeDomainElement functionName args image) domain
+        encodeValues = concat |> (map (\args -> encodeDomainElement functionName args image) domain `using` parListChunk 1000 rdeepseq)
         encodeBounds = forbidOffBounds functionName firstOffBounds lastOffBounds domain imageSize -- TODO: los nombres están swappeados
         imageSize = length image
         firstOffBounds = imageSize                    -- TODO: Oboe
@@ -549,7 +549,7 @@ elementBits f elem n max = map bitAtom |> zip elementBits [0..w]
         fBitsPredicate i = Index bitsTerm [f, indexTerm i]
         elementArguments = elem ++ elementBits
         bitsTerm = Leaf "bits"
-        indexTerm i = Leaf |> "i" ++ show i
+        indexTerm i = Leaf |> show i
         elementBits = padding ++ (map (\x -> Leaf |> show x) |> binaryDigits n)
         w = logTwoCeiling max
         paddingSize = w - (length |> binaryDigits n)
@@ -559,11 +559,12 @@ elementBits f elem n max = map bitAtom |> zip elementBits [0..w]
 -- TODO: Should this be 'just' the conjunct, or also a formulas for 'wrong bit -> not this value'?
 --       Like, for all i, bit [f, i] (arts, b.bits[i].flip) -> not f (args, b).
 valueFormulas :: Term -> [Term] -> Term -> Int -> Int -> [Formula]
-valueFormulas f as b i m = [Implication bitsConjunct valueConjunct, Implication valueConjunct bitsConjunct]
+valueFormulas f as b i m = [Implication bitsConjunct valueConjunct, Implication valueConjunct bitsConjunct] ++ atomOrNot
     where
         valueAtom = Relation f |> as ++ [b]
         valueConjunct = [Mono |> Positive |> valueAtom]
         bitsConjunct = (elementBits f as i m)
+        atomOrNot = eitherFrom (Negative |> valueAtom) (Positive |> valueAtom)
 
 -- `bitConstraints` ensures each tuple in the domain has either zero or one as value for each bit
 -- These are necessary just once per domain element, not per `(domain element, image element)` pair 
@@ -573,14 +574,15 @@ bitConstraints f args m = concat |> map bitFormulas bitIndices
         bitFormulas index = eitherFrom (bitPredicate index valueZero) (bitPredicate index valueOne)
         bitIndices = map (\i -> Leaf |> show i) [1..logM] -- TODO: oboe
         indexTerm index = Index (Leaf "bits") [f, index]
-        valueZero = [(Leaf "zero")]
-        valueOne = [(Leaf "one")]
+        valueZero = [(Leaf "0")]
+        valueOne = [(Leaf "1")]
         bitPredicate bitIndex bitValue = Positive |> Relation (indexTerm bitIndex) (args ++ bitValue)
         logM = logTwoCeiling m
 
 -- `from` is the first forbidden value, `to` is the last
 forbidOffBounds :: Term -> Int -> Int -> [[Term]] -> Int -> [Formula]
 forbidOffBounds f from to domain imageSize = [forbidIndexBits f elem index imageSize | elem <- domain, index <- [from..to]]
+        
 
 ------------------------------------------------------------------------------------------
 
