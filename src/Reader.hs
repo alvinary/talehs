@@ -26,9 +26,6 @@ import qualified Text.Show as Happy_Prelude
 import qualified Data.Array as Happy_Data_Array
 import qualified Data.Bits as Bits
 import qualified GHC.Exts as Happy_GHC_Exts
-import qualified System.IO as Happy_System_IO
-import qualified System.IO.Unsafe as Happy_System_IO_Unsafe
-import qualified Debug.Trace as Happy_Debug_Trace
 import Control.Applicative(Applicative(..))
 import Control.Monad (ap)
 
@@ -450,7 +447,6 @@ happySeq = happyDontSeq
 
 
 
-#define HAPPY_DEBUG 1
 -- $Id: GenericTemplate.hs,v 1.26 2005/01/14 14:47:22 simonmar Exp $
 
 #if !defined(__GLASGOW_HASKELL__)
