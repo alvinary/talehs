@@ -71,15 +71,20 @@ session = Session
           <> short 's'
           <> help "Whether to store the output models to a file." )
 
-run :: Session -> IO ()
-run (Session program models parameters relations store) = putStrLn (program ++ show (readParameters parameters) ++ show models ++ show (readRelations relations))
-run _ = return ()
+run :: Session -> String
+run (Session program models parameters relations store) = program ++ show (readParameters parameters) ++ show models ++ show (readRelations relations)
+
+userInput :: IO Session
+userInput = execParser opts
+    where
+        opts = info (session <**> helper)
+                    ( fullDesc
+                    <> progDesc "Find finite models for syntactically restricted first order theories, similar to an answer set programming engine or logic programming language."
+                    <> header "Tale.hs" )
 
 main :: IO ()
-main = run =<< execParser opts
-  where
-    opts = info (session <**> helper)
-      ( fullDesc
-     <> progDesc "Find finite models for syntactically restricted first order theories, similar to an answer set programming engine or logic programming language."
-     <> header "Tale.hs" )
-
+main = do
+    sessionData <- userInput
+    let placeholderOutput = run sessionData
+    putStrLn placeholderOutput
+    return ()
