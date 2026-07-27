@@ -14,6 +14,16 @@ data Session = Session {
     store :: Bool
 }
 
+readParameters :: String -> [(String, Int)]
+readParameters params = map splitTuple $ map (Text.splitOn colon)  $ Text.splitOn comma $ Text.pack params
+    where
+        colon = Text.pack ":"
+        comma = Text.pack ","
+
+splitTuple :: [Text.Text] -> (String, Int)
+splitTuple [parameter, value] = (Text.unpack parameter, read $ Text.unpack value)
+splitTuple arg = error ("Expected a list of the form [parameter, value], received instead: " ++ show arg)
+
 statements :: String -> [Expression.Statement]
 statements text = Reader.read $ Parser.tokenize $ Text.pack text
 
@@ -27,9 +37,8 @@ main = do
 
 session :: Parser Session
 session = Session
-      <$> strOption
-          ( long "input"
-          <> metavar "PROGRAM"
+      <$> strArgument
+          ( metavar "PROGRAM"
           <> help "Input program path. The file in that path must contain a sequence of well-formed statements." )
       <*> option auto
           ( long "models"
@@ -58,7 +67,7 @@ session = Session
           <> help "Whether to store the output models to a file." )
 
 run :: Session -> IO ()
-run (Session program models paramters relations store) = putStrLn program
+run (Session program models parameters relations store) = putStrLn (program ++ show (readParameters parameters) ++ show models ++ relations)
 run _ = return ()
 
 main :: IO ()
