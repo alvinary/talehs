@@ -14,6 +14,11 @@ data Session = Session {
     store :: Bool
 }
 
+readRelations :: String -> [String]
+readRelations text = map Text.unpack $ Text.splitOn comma $ Text.pack text
+    where
+        comma = Text.pack ","
+
 readParameters :: String -> [(String, Int)]
 readParameters params = map splitTuple $ map (Text.splitOn colon)  $ Text.splitOn comma $ Text.pack params
     where
@@ -67,7 +72,7 @@ session = Session
           <> help "Whether to store the output models to a file." )
 
 run :: Session -> IO ()
-run (Session program models parameters relations store) = putStrLn (program ++ show (readParameters parameters) ++ show models ++ relations)
+run (Session program models parameters relations store) = putStrLn (program ++ show (readParameters parameters) ++ show models ++ show (readRelations relations))
 run _ = return ()
 
 main :: IO ()
