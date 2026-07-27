@@ -31,6 +31,7 @@ module   { Parser.TokenModule }
 params   { Parser.TokenParameters }
 sep      { Parser.TokenSeparator }
 order    { Parser.TokenOrder }
+'|'      { Parser.TokenQuantify }
 ':'      { Parser.TokenColon }
 ';'      { Parser.TokenCross }
 '.'      { Parser.TokenDot }
@@ -39,7 +40,9 @@ order    { Parser.TokenOrder }
 ']'      { Parser.TokenCloseBrackets }
 '('      { Parser.TokenOpenParenthesis }
 ')'      { Parser.TokenCloseParenthesis }
-'<'      { Parser.TokenSmaller }
+'{'      { Parser.TokenBegin }
+'}'      { Parser.TokenEnd }
+'<'      { Parser.TokenLess }
 '>'      { Parser.TokenGreater }
 '='      { Parser.TokenEquals }
 '+'      { Parser.TokenPlus }
@@ -69,11 +72,20 @@ Comparison : '<'                               { $1 }
            | '>'                               { $1 }
            | '='                               { $1 }
 
-Conj : Literal                                 { [$1]  }
-     | Literal ',' Conj                        { $1:$3 }
+Conj : PolyadicSequence ';' LiteralSequence            { $1 ++ (map Expression.Mono $3) }
+     | LiteralSequence                                 { map Expression.Mono $1   }
+     | PolyadicSequence                                { $1 }
 
-Literal : not Atom                             { Expression.Mono (Expression.Negative $2) }
-        | Atom                                 { Expression.Mono (Expression.Positive $1) }
+PolyadicSequence : Polyadic                       { [$1]  }
+                 | Polyadic ';' PolyadicSequence  { $1:$3 }
+
+Polyadic : '{' LiteralSequence '}' { Expression.Poly [] $3 }
+
+LiteralSequence : Literal                         { [$1]  }
+                | Literal ',' LiteralSequence     { $1:$3 }
+     
+Literal : not Atom                                { Expression.Negative $2 }
+        | Atom                                    { Expression.Positive $1 }
 
 Atom : Term '(' TermSequence ')'        { Expression.Relation $1 $3                }
      | Term Comparison Term             { Expression.Comparison $1 (Leaf "<") $3   }
