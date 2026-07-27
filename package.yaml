@@ -28,6 +28,7 @@ dependencies:
 - containers
 - deepseq
 - array
+- optparse-applicative
 
 ghc-options:
 - -Wall
