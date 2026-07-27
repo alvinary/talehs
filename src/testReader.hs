@@ -75,5 +75,14 @@ ejemplines = [readDeclaration "order i 25 : A",
               readDeclaration "var x, y : A",
               readDeclaration "const a[x] : A[x]"]
 
+reglitas = [
+    parse "p(x)",
+    parse "p(x, y)",
+    parse "p(t[x], t[y]) -> s(t)",
+    parse "p(x), s(x, y) -> False",
+    parse "{ p(x), q(x) }",
+    parse "x | p(x, y) | ",
+    parse "x | p(x, y) | "]
+
 orderDeclarationByTokens = [Parser.TokenOrder, Parser.TokenLeaf "i", Parser.TokenLeaf "25", Parser.TokenColon, Parser.TokenLeaf "A"]
 orderDeclarationFromTokens = Expression.showThing $ head $ Reader.read orderDeclarationByTokens

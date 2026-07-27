@@ -115,9 +115,8 @@ data Literal = Positive Atom
              | Negative Atom
     deriving (Eq, Ord, Generic, NFData)
 
--- TODO: this name is DEEPLY wrong
 data Conjunction = Mono Literal
-                 | Poly [Term] [Literal] -- TODO: explain what this is
+                 | Poly [Term] [Literal]
     deriving (Eq, Ord, Generic, NFData)
 
 data Formula = Assertion [Conjunction]
