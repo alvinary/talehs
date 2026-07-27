@@ -24,6 +24,9 @@ tokenShapes = [(".\n", TokenSeparator),
                ("order", TokenOrder),
                ("params", TokenParameters),
                ("module", TokenModule),
+               ("{", TokenBegin),
+               ("}", TokenEnd),
+               ("|", TokenQuantify),
                (":", TokenColon),
                (";", TokenCross),
                ("(", TokenOpenParenthesis),
@@ -91,6 +94,9 @@ data Token  = TokenLeaf String
             | TokenCross
             | TokenColon
             | TokenSeparator
+            | TokenQuantify
+            | TokenBegin
+            | TokenEnd
     deriving Show
 
 parseError = error "Parse error"
