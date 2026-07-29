@@ -262,6 +262,10 @@ instance Expression Conjunction where
             literalLeaves = map leaves literals
     atoms (Mono literal) = atoms literal
     atoms (Poly ranges literals) = bigUnion |> map atoms literals
+    collect (Poly ranges literals) = Set.difference (bigUnion literalLeaves) (bigUnion rangeLeaves)
+        where
+            rangeLeaves = map leaves ranges
+            literalLeaves = map leaves literals
 
 instance Expression Formula where
     replace (Assertion conjuncts) binding = Assertion conjuncts_
