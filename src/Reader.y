@@ -8,10 +8,11 @@ import Parser
 %name read                                -- Name of the function Happy will generate
 %tokentype    { Parser.Token }            -- Type of the Start non-terminal
 %error        { Parser.parseError }       -- Name of the function to call if an error occurs during parsing
+%errorhandlertype explist
 
 
 %right '.'
-%nonassoc '<' '>' '=' '->' '<->'
+%nonassoc '<' '>' '=' '->' '<->' '|' '{' '}'
 %right '+' '*'
 %right ','
 %left '+' '-'
@@ -72,14 +73,12 @@ Comparison : '<'                               { $1 }
            | '>'                               { $1 }
            | '='                               { $1 }
 
-Conj : PolyadicSequence ';' LiteralSequence            { $1 ++ (map Expression.Mono $3) }
-     | LiteralSequence                                 { map Expression.Mono $1   }
-     | PolyadicSequence                                { $1 }
+Conj : Literal                                 { [Expression.Mono $1] }
+     | Polyadic                                { [$1] }
+     | Polyadic ',' Conj                       { $1:$3 }
+     | Literal ',' Conj                        { (Expression.Mono $1):$3 }
 
-PolyadicSequence : Polyadic                       { [$1]  }
-                 | Polyadic ';' PolyadicSequence  { $1:$3 }
-
-Polyadic : '{' LiteralSequence '}' { Expression.Poly [] $3 }
+Polyadic : TermSequence '|' '{' LiteralSequence '}'             { Expression.Poly $1 $4 }
 
 LiteralSequence : Literal                         { [$1]  }
                 | Literal ',' LiteralSequence     { $1:$3 }
@@ -90,10 +89,10 @@ Literal : not Atom                                { Expression.Negative $2 }
 Atom : Term '(' TermSequence ')'        { Expression.Relation $1 $3                }
      | Term Comparison Term             { Expression.Comparison $1 (Leaf "<") $3   }
 
-TermSequence : Term                     {  [$1] }
+TermSequence : Term                     {    [$1]    }
              | TermSequence ',' Term    { $1 ++ [$3] }
 
-Crosses       : Term                    {  [$1] }
+Crosses       : Term                    {    [$1]    }
               | Crosses ';' Term        { $1 ++ [$3] }
 
 Term  : Term '.' Term                   { Expression.Attribute $1 $3 }
