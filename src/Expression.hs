@@ -142,7 +142,7 @@ instance Show Literal where
  
 instance Show Conjunction where
     show (Mono literal) = show literal
-    show (Poly ts ls) = "for " ++ (intercalate ", " (map show ts)) ++ " : " ++ (intercalate ", " (map show ls))
+    show (Poly ts ls) = (intercalate ", " (map show ts)) ++ " | { " ++ (intercalate ", " (map show ls)) ++ " }"
 
 instance Show Formula where
     show (Assertion conjuncts) = intercalate ", " (map show conjuncts)
