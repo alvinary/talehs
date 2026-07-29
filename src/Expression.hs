@@ -142,7 +142,7 @@ instance Show Literal where
  
 instance Show Conjunction where
     show (Mono literal) = show literal
-    show (Poly ts ls) = "for " ++ (intercalate ", " (map show ts)) ++ " : " ++ (intercalate ", " (map show ls))
+    show (Poly ts ls) = (intercalate ", " (map show ts)) ++ " | { " ++ (intercalate ", " (map show ls)) ++ " }"
 
 instance Show Formula where
     show (Assertion conjuncts) = intercalate ", " (map show conjuncts)
@@ -262,6 +262,10 @@ instance Expression Conjunction where
             literalLeaves = map leaves literals
     atoms (Mono literal) = atoms literal
     atoms (Poly ranges literals) = bigUnion |> map atoms literals
+    collect (Poly ranges literals) vars = Set.difference (bigUnion bodyVariables) (bigUnion rangeVariables)
+        where
+            rangeVariables = map (\x -> collect x vars) ranges
+            bodyVariables = map (\x -> collect x vars) literals
 
 instance Expression Formula where
     replace (Assertion conjuncts) binding = Assertion conjuncts_
@@ -721,8 +725,6 @@ getGamma program = unfoldInstance state rules
 ---------------------------------------------------------------------------------------------------------
 --- TODOS y preguntas -----------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------
-
-
 
 -----------------------------------------------------------------------
 -- CASOS DE ERROR -----------------------------------------------------

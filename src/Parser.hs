@@ -97,9 +97,10 @@ data Token  = TokenLeaf String
             | TokenQuantify
             | TokenBegin
             | TokenEnd
+            | TokenLess
     deriving Show
 
-parseError = error "Parse error"
+parseError = error "Parse error D:"
 
 tokenize :: Text.Text -> [Token]
 tokenize text = map readToken |> splitTokens adaptedText
