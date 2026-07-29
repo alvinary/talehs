@@ -9,8 +9,8 @@ import Control.Monad (join)
 data Session = Session {
     programPath :: String,
     models :: Int,
-    parameters :: String,
-    relations :: String,
+    parameters :: [(String, Int)],
+    relations :: [String],
     store :: Bool
 }
 
@@ -52,27 +52,29 @@ session = Session
           <> showDefault
           <> value 1
           <> metavar "MODELS" )
-      <*> strOption
-          ( long "parameters"
-          <> short 'p'
-          <> help "Module parameters, in the format <param> : <int> (like 'n:100,m:100,w:20,k:12', etc)."
-          <> showDefault
-          <> value ""
-          <> metavar "PARAMS" )
-      <*> strOption
-          ( long "relations"
-          <> short 'r'
-          <> help "Names of relations to be included in the output models (only included relations will be shown in the output). For instance, in a file that specifies graphs with edges and colors using some other auxiliary predicates, you can 'see' only edges and colors by passing -r edges,colors"
-          <> showDefault
-          <> value ""
-          <> metavar "RELS" )
+      <*> (readParameters <$>
+                strOption
+                    ( long "parameters"
+                    <> short 'p'
+                    <> help "Module parameters, in the format <param> : <int> (like 'n:100,m:100,w:20,k:12', etc)."
+                    <> showDefault
+                    <> value ""
+                    <> metavar "PARAMS" ))
+      <*> (readRelations <$>
+                strOption
+                    ( long "relations"
+                    <> short 'r'
+                    <> help "Names of relations to be included in the output models (only included relations will be shown in the output). For instance, in a file that specifies graphs with edges and colors using some other auxiliary predicates, you can 'see' only edges and colors by passing -r edges,colors"
+                    <> showDefault
+                    <> value ""
+                    <> metavar "RELS" ))
       <*> switch
           ( long "store"
           <> short 's'
           <> help "Whether to store the output models to a file." )
 
 run :: Session -> String
-run (Session program models parameters relations store) = program ++ show (readParameters parameters) ++ show models ++ show (readRelations relations)
+run (Session program models parameters relations store) = program ++ show parameters ++ show models ++ show relations
 
 userInput :: IO Session
 userInput = execParser opts

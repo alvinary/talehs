@@ -80,9 +80,10 @@ reglitas = [
     parse "p(x, y)",
     parse "p(t[x], t[y]) -> s(t)",
     parse "p(x), s(x, y) -> False",
-    parse "{ p(x), q(x) }",
-    parse "x | p(x, y) | ",
-    parse "x | p(x, y) | "]
+    parse "x, y | { p(x), q(x) }",
+    parse "x | { p(x, y), q (x) } ",
+    parse "x | { p(x, y) } ",
+    parse " { p ( x , y ) } "]
 
 orderDeclarationByTokens = [Parser.TokenOrder, Parser.TokenLeaf "i", Parser.TokenLeaf "25", Parser.TokenColon, Parser.TokenLeaf "A"]
 orderDeclarationFromTokens = Expression.showThing $ head $ Reader.read orderDeclarationByTokens
