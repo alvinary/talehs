@@ -157,6 +157,7 @@ class Ord a => Expression a where
     leaves :: a -> Set String
     atoms :: a -> Set Atom
     isGround :: a -> Set String -> Bool
+    allMono :: a -> Bool
     collect expr vars = (leaves expr) `intersection` vars
     isGround expr vars = Set.null (collect expr vars)
 
@@ -222,6 +223,8 @@ instance Expression Term where
 
     atoms term = Set.empty
 
+    allMono term = True
+
 instance Expression Atom where
     replace (Relation pred args) binding = (Relation pred_ args_)
         where
@@ -236,6 +239,8 @@ instance Expression Atom where
     leaves (Relation pred args) = leaves pred `union` (bigUnion |> map (\a -> leaves a) args)
     atoms at = Set.singleton at
 
+    allMono atom = True
+
 instance Expression Literal where
     replace (Positive at) binding = Positive at_
         where
@@ -247,6 +252,8 @@ instance Expression Literal where
     leaves (Negative at) = leaves at
     atoms (Positive at) = Set.singleton at
     atoms (Negative at) = Set.singleton at
+
+    allMono literal = True
 
 instance Expression Conjunction where
     replace (Mono literal) binding = Mono (replace literal binding)
@@ -261,6 +268,9 @@ instance Expression Conjunction where
         where
             rangeVariables = map (\x -> collect x vars) ranges
             bodyVariables = map (\x -> collect x vars) literals
+
+    allMono (Mono _) = True
+    allMono (Poly _ _) = False
 
 instance Expression Formula where
     replace (Assertion conjuncts) binding = Assertion conjuncts_
@@ -298,6 +308,11 @@ instance Expression Formula where
     atoms (Implication hypo conc) = (bigUnion |> map atoms hypo) `union` (bigUnion |> map atoms conc)
     atoms (Equivalence lhs rhs) = (bigUnion |> map atoms lhs) `union` (bigUnion |> map atoms rhs)
 
+    allMono (Assertion conjuncts) = foldr (&&) True |> map allMono conjuncts
+    allMono (Disjunction conjuncts) = foldr (&&) True |> map allMono conjuncts
+    allMono (Contradiction conjuncts) = foldr (&&) True |> map allMono conjuncts
+    allMono (Implication hypo conc) = (foldr (&&) True |> map allMono hypo) && (foldr (&&) True |> map allMono conc)
+    allMono (Equivalence lhs rhs) = (foldr (&&) True |> map allMono lhs) && (foldr (&&) True |> map allMono rhs)
 ------------------------------------------------------------------------------------------
 -- Types of statements (rules and declarations) ------------------------------------------
 ------------------------------------------------------------------------------------------
@@ -365,6 +380,8 @@ instance Expression Declaration where
     leaves (Parameters ts) = bigUnion (map leaves ts)
 
     atoms declaration = Set.empty
+
+    allMono declaration = True
 
 -------------------------------------------------------------------------------------------
 
@@ -648,6 +665,11 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 
 --------------------------------------------------------------------------------------------------------------
 
+-- TODO: Try to group all rules with the same variable signature to make all assignments for that signature just once
+
+polyGrounding :: (Expression a, NFData a) => a -> State -> [a]
+polyGrounding expression state = []
+
 -- TODO: 
 -- a) make sure the way local variables vs global variables are treated is the intended one
 bindPoly :: Conjunction -> Dict.Map String [Term] -> Dict.Map String Term -> [Conjunction]
@@ -690,8 +712,9 @@ unfoldInstance state rules = allFunctionEncodings ++ allMonoGroundings ++ allPol
         allMonoGroundings = concat |> map (\x -> grounding x state) monoRules
         unaEncoding = []
         negationEncoding = encodeNegation state rules
-        monoRules = rules
-        allPolyGroundings = []
+        monoRules = filter allMono rules
+        polyRules = filter (\x -> not |> allMono x) rules
+        allPolyGroundings = concat |> map (\x -> polyGrounding x state) polyRules
 
 encodeAllFunctions :: State -> [Formula]
 encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListChunk 1000 rdeepseq)
@@ -711,6 +734,8 @@ encodeNegation state rules = concat |> map negationClauses allAtoms
         groundAtoms atom = grounding atom state
         negationClauses atom = concat |> map groundNegation |> groundAtoms atom
         groundNegation atom = eitherFrom (Positive atom) (Negative atom)
+
+--------------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------------
 -- Map Programs to their Models ------------------------------------------------------
