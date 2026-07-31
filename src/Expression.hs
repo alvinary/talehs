@@ -250,11 +250,6 @@ instance Expression Literal where
 
 instance Expression Conjunction where
     replace (Mono literal) binding = Mono (replace literal binding)
-    replace (Poly ranges literals) binding = Poly ranges_ literals_
-        where
-            ranges_ = map replace_ ranges
-            literals_ = map replace_ literals
-            replace_ x = replace x binding
     leaves (Mono literal) = leaves literal
     leaves (Poly ranges literals) = bigUnion rangeLeaves `union` bigUnion literalLeaves
         where
@@ -611,6 +606,18 @@ eitherFrom phi psi = [Disjunction both, Contradiction both]
 -- Variables, ground vs non-ground formulas, and assignments -----------------------------
 ------------------------------------------------------------------------------------------
 
+{-
+collectLocal :: Literal a -> [a]
+collectLocal (Poly range literals) vars = Set.toList bigUnion |> map (\x -> collect x vars) range
+collectLocal _ _ = []
+
+cuál es la semantica de y | { p(x, y) }, z { p (x, z) }...
+ahh, cada uno de esos solo 'mira' sus variables locales, y lo concatenás.
+tengo que implementar... substitute para Poly
+Replace! 
+
+-}
+
 grounding :: (Expression a, NFData a) => a -> State -> [a]
 grounding expression state | check expression = [expression]
     where
@@ -639,12 +646,26 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 
 --------------------------------------------------------------------------------------------------------------
 
+-- TODO: make sure the way local variables vs global variables are treated is the intended one
+bindPoly :: Conjunction -> Dict.Map String [Term] -> [String] -> Dict.Map String Term -> [Conjunction]
+bindPoly (Poly head body) ranges variables globalAssignment = concat |> map (groundBody body) localAssignments
+    where
+        groundBody :: [Literal] -> Binding -> [Conjunction]
+        groundBody body localBinding = map (\literal -> groundLiteral literal localBinding) body
+        groundLiteral :: Literal -> Binding -> Conjunction
+        groundLiteral literal localBinding = replace (Mono literal) (Dict.union localBinding globalAssignment)
+        localAssignments = assignments (Poly head body) ranges localVariables
+        localVariables = Set.toList |> bigUnion |> map leaves head -- there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
+bindPoly e r v a = error |> "Cannot apply binding for Polyadic expressions to non-Polyadic expression " ++ show e
+
+-- a esto hacele una version con bindPoly en vez de bind
 groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [a]
 groundingStep expression ranges variables = map bind allAssignments `using` parListChunk 1000 rdeepseq
     where
-        bind b = replace expression b
+        bind b = replace expression b -- acá meté ranges también
         allAssignments = assignments expression ranges variables
 
+-- Check if expression can be substituted there
 assignments :: Expression a => a -> Dict.Map String [Term] -> [String] -> [Dict.Map String Term]
 assignments expression ranges variables = map makeAssignment product
     where
