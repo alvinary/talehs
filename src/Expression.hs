@@ -618,6 +618,8 @@ Replace!
 
 -}
 
+-- a) check if `check` works with the variables in Poly expressions
+-- b) make test cases for isGround (Poly head body) stateVariables
 grounding :: (Expression a, NFData a) => a -> State -> [a]
 grounding expression state | check expression = [expression]
     where
@@ -646,9 +648,10 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 
 --------------------------------------------------------------------------------------------------------------
 
--- TODO: make sure the way local variables vs global variables are treated is the intended one
-bindPoly :: Conjunction -> Dict.Map String [Term] -> [String] -> Dict.Map String Term -> [Conjunction]
-bindPoly (Poly head body) ranges variables globalAssignment = concat |> map (groundBody body) localAssignments
+-- TODO: 
+-- a) make sure the way local variables vs global variables are treated is the intended one
+bindPoly :: Conjunction -> Dict.Map String [Term] -> Dict.Map String Term -> [Conjunction]
+bindPoly (Poly head body) ranges globalAssignment = concat |> map (groundBody body) localAssignments
     where
         groundBody :: [Literal] -> Binding -> [Conjunction]
         groundBody body localBinding = map (\literal -> groundLiteral literal localBinding) body
@@ -656,13 +659,12 @@ bindPoly (Poly head body) ranges variables globalAssignment = concat |> map (gro
         groundLiteral literal localBinding = replace (Mono literal) (Dict.union localBinding globalAssignment)
         localAssignments = assignments (Poly head body) ranges localVariables
         localVariables = Set.toList |> bigUnion |> map leaves head -- there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
-bindPoly e r v a = error |> "Cannot apply binding for Polyadic expressions to non-Polyadic expression " ++ show e
+bindPoly e r a = error |> "Cannot apply binding for Polyadic expressions to non-Polyadic expression " ++ show e
 
--- a esto hacele una version con bindPoly en vez de bind
 groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [a]
 groundingStep expression ranges variables = map bind allAssignments `using` parListChunk 1000 rdeepseq
     where
-        bind b = replace expression b -- acá meté ranges también
+        bind binding = replace expression binding
         allAssignments = assignments expression ranges variables
 
 -- Check if expression can be substituted with _ there (i.e. if it is not used in the function body)
@@ -682,12 +684,14 @@ getState [] = emptyState
 getState (d:declarations) = stateUpdate d (getState declarations)
 
 unfoldInstance :: State -> [Formula] -> [Formula]
-unfoldInstance state rules = allFunctionEncodings ++ allRuleGroundings ++ unaEncoding ++ negationEncoding
+unfoldInstance state rules = allFunctionEncodings ++ allMonoGroundings ++ allPolyGroundings ++ unaEncoding ++ negationEncoding
     where
         allFunctionEncodings = encodeAllFunctions state
-        allRuleGroundings = concat |> map (\x -> grounding x state) rules
+        allMonoGroundings = concat |> map (\x -> grounding x state) monoRules
         unaEncoding = []
         negationEncoding = encodeNegation state rules
+        monoRules = rules
+        allPolyGroundings = []
 
 encodeAllFunctions :: State -> [Formula]
 encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListChunk 1000 rdeepseq)
