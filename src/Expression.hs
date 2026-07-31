@@ -665,7 +665,7 @@ groundingStep expression ranges variables = map bind allAssignments `using` parL
         bind b = replace expression b -- acá meté ranges también
         allAssignments = assignments expression ranges variables
 
--- Check if expression can be substituted there
+-- Check if expression can be substituted with _ there (i.e. if it is not used in the function body)
 assignments :: Expression a => a -> Dict.Map String [Term] -> [String] -> [Dict.Map String Term]
 assignments expression ranges variables = map makeAssignment product
     where
