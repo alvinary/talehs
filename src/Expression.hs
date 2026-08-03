@@ -116,7 +116,7 @@ data Literal = Positive Atom
     deriving (Eq, Ord, Generic, NFData)
 
 data Conjunction = Mono Literal
-                 | Poly [Term] [Literal]
+                 | Poly [(Term, Term)] [Literal]
     deriving (Eq, Ord, Generic, NFData)
 
 data Formula = Assertion [Conjunction]
@@ -142,7 +142,7 @@ instance Show Literal where
  
 instance Show Conjunction where
     show (Mono literal) = show literal
-    show (Poly ts ls) = (intercalate ", " (map show ts)) ++ " | { " ++ (intercalate ", " (map show ls)) ++ " }"
+    show (Poly ts ls) = (intercalate ", " (map (\(x, y) -> show x ++ ":" ++ show y) ts)) ++ " | { " ++ (intercalate ", " (map show ls)) ++ " }"
 
 instance Show Formula where
     show (Assertion conjuncts) = intercalate ", " (map show conjuncts)
@@ -260,13 +260,13 @@ instance Expression Conjunction where
     leaves (Mono literal) = leaves literal
     leaves (Poly ranges literals) = bigUnion rangeLeaves `union` bigUnion literalLeaves
         where
-            rangeLeaves = map leaves ranges
+            rangeLeaves = (map leaves |> map (\(x,y) -> x) ranges) ++ (map leaves |> map (\(x,y) -> y) ranges)
             literalLeaves = map leaves literals
     atoms (Mono literal) = atoms literal
     atoms (Poly ranges literals) = bigUnion |> map atoms literals
     collect (Poly ranges literals) vars = Set.difference (bigUnion bodyVariables) (bigUnion rangeVariables)
         where
-            rangeVariables = map (\x -> collect x vars) ranges
+            rangeVariables = map (\(x, y) -> Set.union (collect x vars) (collect y vars)) ranges -- TODO: check this
             bodyVariables = map (\x -> collect x vars) literals
 
     allMono (Mono _) = True
@@ -667,9 +667,6 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 
 -- TODO: Try to group all rules with the same variable signature to make all assignments for that signature just once
 
-polyGrounding :: (Expression a, NFData a) => a -> State -> [a]
-polyGrounding expression state = []
-
 -- TODO: 
 -- a) make sure the way local variables vs global variables are treated is the intended one
 bindPoly :: Conjunction -> Dict.Map String [Term] -> Dict.Map String Term -> [Conjunction]
@@ -680,7 +677,7 @@ bindPoly (Poly head body) ranges globalAssignment = concat |> map (groundBody bo
         groundLiteral :: Literal -> Binding -> Conjunction
         groundLiteral literal localBinding = replace (Mono literal) (Dict.union localBinding globalAssignment)
         localAssignments = assignments (Poly head body) ranges localVariables
-        localVariables = Set.toList |> bigUnion |> map leaves head -- there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
+        localVariables = Set.toList |> bigUnion |> map (\(x, y) -> Set.union (leaves x) (leaves y)) head -- there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
 bindPoly e r a = error |> "Cannot apply binding for Polyadic expressions to non-Polyadic expression " ++ show e
 
 groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [a]
@@ -689,7 +686,7 @@ groundingStep expression ranges variables = map bind allAssignments `using` parL
         bind binding = replace expression binding
         allAssignments = assignments expression ranges variables
 
--- Check if expression can be substituted with _ there (i.e. if it is not used in the function body)
+-- Check if `expression` can be substituted with _ there (i.e. if it is not used in the function body)
 assignments :: Expression a => a -> Dict.Map String [Term] -> [String] -> [Dict.Map String Term]
 assignments expression ranges variables = map makeAssignment product
     where
@@ -704,6 +701,8 @@ assignments expression ranges variables = map makeAssignment product
 getState :: [Declaration] -> State
 getState [] = emptyState
 getState (d:declarations) = stateUpdate d (getState declarations)
+
+polyGrounding _ state = []
 
 unfoldInstance :: State -> [Formula] -> [Formula]
 unfoldInstance state rules = allFunctionEncodings ++ allMonoGroundings ++ allPolyGroundings ++ unaEncoding ++ negationEncoding
