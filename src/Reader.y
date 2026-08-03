@@ -78,7 +78,7 @@ Conj : Literal                                 { [Expression.Mono $1] }
      | Polyadic ',' Conj                       { $1:$3 }
      | Literal ',' Conj                        { (Expression.Mono $1):$3 }
 
-Polyadic : TermSequence '|' '{' LiteralSequence '}'             { Expression.Poly $1 $4 }
+Polyadic : TermPairSequence '|' '{' LiteralSequence '}' { Expression.Poly $1 $4 }
 
 LiteralSequence : Literal                         { [$1]  }
                 | Literal ',' LiteralSequence     { $1:$3 }
@@ -88,6 +88,9 @@ Literal : not Atom                                { Expression.Negative $2 }
 
 Atom : Term '(' TermSequence ')'        { Expression.Relation $1 $3                }
      | Term Comparison Term             { Expression.Comparison $1 (Leaf "<") $3   }
+
+TermPairSequence : Term ':' Term                       { [($1, $3)] }
+                 | TermPairSequence ',' Term ':' Term  { $1 ++ [($3, $5)] }
 
 TermSequence : Term                     {    [$1]    }
              | TermSequence ',' Term    { $1 ++ [$3] }
