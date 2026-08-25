@@ -19,7 +19,7 @@ import Numeric (showBin)
 import Prelude (putStrLn)
 
 import Control.Parallel.Strategies (parListChunk, rdeepseq, using, NFData)
-import Control.DeepSeq (NFData)
+import Control.DeepSeq (NFData, force)
 import GHC.Generics (Generic)
 
 infixr 0 |>
@@ -697,8 +697,9 @@ bindPoly any _ globalAssignment = replace any globalAssignment
 groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [a]
 groundingStep expression ranges variables = map bind allAssignments `using` parListChunk 1000 rdeepseq
     where
-        bind binding = bindAny expression ranges binding
+        bind binding = bindAny expression fixedRanges binding
         allAssignments = assignments expression ranges variables
+        !fixedRanges = force ranges
 
 -- Check if `expression` can be substituted with _ there (i.e. if it is not used in the function body)
 assignments :: Expression a => a -> Dict.Map String [Term] -> [String] -> [Dict.Map String Term]
