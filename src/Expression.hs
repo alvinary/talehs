@@ -732,6 +732,8 @@ encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListC
         getDomain f = sequence |> map sortMembers |> Dict.findWithDefault [] f (domains state)
 
 -- TODO: negation does not handle all cases of Poly grounding
+-- The solution is to map all Poly subexpressions to a list of [(atom, local variables)],
+-- create dummy global variables with the same ranges, and unfold negation for those
 encodeNegation :: State -> [Formula] -> [Formula]
 encodeNegation state rules = concat |> map negationClauses allAtoms
     where
