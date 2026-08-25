@@ -158,6 +158,8 @@ class Ord a => Expression a where
     atoms :: a -> Set Atom
     isGround :: a -> Set String -> Bool
     allMono :: a -> Bool
+    bindAny :: a -> Dict.Map String [Term] -> Binding -> a
+    bindAny expr _ binding = replace expr binding
     collect expr vars = (leaves expr) `intersection` vars
     isGround expr vars = Set.null (collect expr vars)
 
@@ -257,6 +259,8 @@ instance Expression Literal where
 
 instance Expression Conjunction where
     replace (Mono literal) binding = Mono (replace literal binding)
+    replace (Poly head body) binding = Poly (map (\(x, y) -> (replace x binding, replace y binding)) head) (map (\x -> replace x binding) body)
+    bindAny (Poly head body) ranges binding = bindPoly (Poly head body) ranges binding
     leaves (Mono literal) = leaves literal
     leaves (Poly ranges literals) = bigUnion rangeLeaves `union` bigUnion literalLeaves
         where
@@ -637,6 +641,11 @@ Replace!
 
 -- a) check if `check` works with the variables in Poly expressions
 -- b) make test cases for isGround (Poly head body) stateVariables
+
+-- Que pasa si groundeás todo a lo normal, y después para cada output chequeas....
+-- si es ground y allMono...                                [expression]
+-- si es ground y NO allMono... (el caso nuevo)             upackAndGroundLocal expression state variables
+-- si no es ni ground ni allMono...                         unpackAndGround expression state variables
 grounding :: (Expression a, NFData a) => a -> State -> [a]
 grounding expression state | check expression = [expression]
     where
@@ -650,7 +659,7 @@ grounding expression state | otherwise = concat |> map (\x -> grounding x state)
 emptyTerm :: Term -- TODO: parser must reject empty terms. Ensure it does, ensure that's known.
 emptyTerm = (Leaf "")
 
--- Do the 'partial' frounding without having to check every time if the result is ground. TODO: is this really more efficient?
+-- Do the 'partial' grounding without having to check every time if the result is ground. TODO: is this really more efficient?
 unpackAndGround :: (Expression a, NFData a) => a -> State -> Set String -> [a]
 unpackAndGround expression state stateVars = groundingStep expression allRanges expressionVariables
     where
@@ -669,21 +678,26 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 
 -- TODO: 
 -- a) make sure the way local variables vs global variables are treated is the intended one
-bindPoly :: Conjunction -> Dict.Map String [Term] -> Dict.Map String Term -> [Conjunction]
-bindPoly (Poly head body) ranges globalAssignment = concat |> map (groundBody body) localAssignments
+
+-- We map Poly head body globalAssignment to a list of Mono literals unfolding the local variables
+-- First, we subsitute all global variables until we get a ground term
+-- Then, we get all local assignments, and map those to a list of... body / local_assignment
+
+bindPoly :: Conjunction -> Dict.Map String [Term] -> Dict.Map String Term -> Conjunction
+bindPoly (Poly head body) ranges globalAssignment = Poly [] |> (concat |> map makeMono localAssignments)
     where
-        groundBody :: [Literal] -> Binding -> [Conjunction]
-        groundBody body localBinding = map (\literal -> groundLiteral literal localBinding) body
-        groundLiteral :: Literal -> Binding -> Conjunction
-        groundLiteral literal localBinding = replace (Mono literal) (Dict.union localBinding globalAssignment)
+        makeMono localAssignment = map (\x -> replace x localAssignment) body 
         localAssignments = assignments (Poly head body) ranges localVariables
-        localVariables = Set.toList |> bigUnion |> map (\(x, y) -> Set.union (leaves x) (leaves y)) head -- there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
-bindPoly e r a = error |> "Cannot apply binding for Polyadic expressions to non-Polyadic expression " ++ show e
+        localVariables = Set.toList |> bigUnion |> map (\(x, y) -> leaves x) head -- Only works for 'simple' term variables . there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
+        groundedRule = replace (Poly head body) globalAssignment
+bindPoly any _ globalAssignment = replace any globalAssignment
+
+-- Separa las reglas no poly de las poly y hace todo igual para las no poly, y una función nueva para las poly
 
 groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [a]
 groundingStep expression ranges variables = map bind allAssignments `using` parListChunk 1000 rdeepseq
     where
-        bind binding = replace expression binding
+        bind binding = bindAny expression ranges binding
         allAssignments = assignments expression ranges variables
 
 -- Check if `expression` can be substituted with _ there (i.e. if it is not used in the function body)
@@ -782,18 +796,25 @@ getGamma program = unfoldInstance state rules
 -- ERROR DE SINTAXIS
 
 -- DECLARACIONES CÍCLICAS
+-- El grafo de depenendencias de las declaraciones no es acíclico
 
 -- DECLARACIÓN DE VARIABLE INCONSISTENTE
+-- Se declara dos veces una misma variables con distinto rango
 
 -- DECLARACIÓN DE FUNCIÓN INCONSISTENTE (mismo dominio, distinta imagen)
 
 -- MÓDULO NO ENCONTRADO
 
 -- ATRIBUTO SIN DEFINICIÓN
+-- Al intentar evaluar a.f, se encuentra que el mapa de valores no tiene un atributo f definido para el término a
 
 -- TÉRMINO EN DECLARACIÓN DE ORDEN TOTAL NO ES UN NÚMERO
+-- El término que usaste para definir un orden total no se puede interpretar como un cardinal
 
 -- LHS DE DECLARACIÓN DE ASIGNACIÓN NO ES UN ATRIBUTO
+-- tenés a = b, pero a no es de la forma c.f
+
+-- LAS VARIABLES LOCALES NO DEBEN SER VARIABLES REGISTRADAS COMO VARIABLES GLOBALES DE LA ESPECIFICACIÓN
 
 -----------------------------------------------------------------------
 -- ADVERTENCIAS -------------------------------------------------------
