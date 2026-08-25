@@ -642,10 +642,6 @@ Replace!
 -- a) check if `check` works with the variables in Poly expressions
 -- b) make test cases for isGround (Poly head body) stateVariables
 
--- Que pasa si groundeás todo a lo normal, y después para cada output chequeas....
--- si es ground y allMono...                                [expression]
--- si es ground y NO allMono... (el caso nuevo)             upackAndGroundLocal expression state variables
--- si no es ni ground ni allMono...                         unpackAndGround expression state variables
 grounding :: (Expression a, NFData a) => a -> State -> [a]
 grounding expression state | check expression = [expression]
     where
@@ -679,10 +675,6 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 -- TODO: 
 -- a) make sure the way local variables vs global variables are treated is the intended one
 
--- We map Poly head body globalAssignment to a list of Mono literals unfolding the local variables
--- First, we subsitute all global variables until we get a ground term
--- Then, we get all local assignments, and map those to a list of... body / local_assignment
-
 bindPoly :: Conjunction -> Dict.Map String [Term] -> Dict.Map String Term -> Conjunction
 bindPoly (Poly head body) ranges globalAssignment = Poly [] |> (concat |> map makeMono localAssignments)
     where
@@ -691,8 +683,6 @@ bindPoly (Poly head body) ranges globalAssignment = Poly [] |> (concat |> map ma
         localVariables = Set.toList |> bigUnion |> map (\(x, y) -> leaves x) head -- Only works for 'simple' term variables . there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
         groundedRule = replace (Poly head body) globalAssignment
 bindPoly any _ globalAssignment = replace any globalAssignment
-
--- Separa las reglas no poly de las poly y hace todo igual para las no poly, y una función nueva para las poly
 
 groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [a]
 groundingStep expression ranges variables = map bind allAssignments `using` parListChunk 1000 rdeepseq
