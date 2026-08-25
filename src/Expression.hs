@@ -731,6 +731,7 @@ encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListC
         getImage f = sortMembers |> Dict.findWithDefault (Leaf "") f (images state)
         getDomain f = sequence |> map sortMembers |> Dict.findWithDefault [] f (domains state)
 
+-- TODO: negation does not handle all cases of Poly grounding
 encodeNegation :: State -> [Formula] -> [Formula]
 encodeNegation state rules = concat |> map negationClauses allAtoms
     where
