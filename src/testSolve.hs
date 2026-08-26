@@ -59,25 +59,12 @@ lolodor = (wobtain leForm, Expression.bindPoly (gobtain leForm) (Expression.memb
     where
         leForm = simpleFormulas !! 2
         wobtain (Implication a b) = obtain $ head b
-        wobtain _ = ["MUERTE"]
+        wobtain _ = error "Was expecting an implication"
         gobtain (Implication a b) = head b
         obtain (Poly head body) = Set.toList $ bigUnion $ map (\(x, y) -> leaves x) head
         obtain _ = []
 
-{-
-palodor = assignments leForm lesRanges lesVars 
-    where
-        lesValus = retrieve (Expression.ranges sampleState) (Expression.members sampleState)
-        lesRanges = Map.fromList $ map (\(x, y) -> (show x, Map.findWithDefault (error "aaa") (show y) (Expression.ranges sampleState))) head
-        lesVars = wobtain leForm
-        leForm = simpleFormulas !! 2
-        wobtain (Implication a b) = obtain $ head b
-        wobtain _ = ["MUERTE"]
-        obtain (Poly head body) = Set.toList $ bigUnion $ map (\(x, y) -> leaves x) head
-        obtain _ = []
--}
-
-simpleProgram = map fromDeclaration simpleDeclarations ++ map fromFormula simpleRules
+simpleProgram = map fromDeclaration simpleDeclarations ++ map fromFormula (take 2 simpleRules)
     where
         fromDeclaration d = Dec $ parseDeclaration d
         fromFormula f = For $ parseRule f
