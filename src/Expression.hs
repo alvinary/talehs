@@ -260,7 +260,7 @@ instance Expression Literal where
 instance Expression Conjunction where
     replace (Mono literal) binding = Mono (replace literal binding)
     replace (Poly head body) binding = Poly (map (\(x, y) -> (replace x binding, replace y binding)) head) (map (\x -> replace x binding) body)
-    bindAny (Poly head body) members binding = bindPoly (Poly head body) members binding
+    bindAny (Poly head body) members binding = bindPoly (replace (Poly head body) binding) members binding
     leaves (Mono literal) = leaves literal
     leaves (Poly ranges literals) = bigUnion rangeLeaves `union` bigUnion literalLeaves
         where
@@ -666,10 +666,9 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 bindPoly :: Conjunction -> Dict.Map Term [Term] -> Dict.Map String Term -> Conjunction
 bindPoly (Poly head body) members globalAssignment = Poly [] |> (concat |> map makeMono localAssignments)
     where
-        makeMono localAssignment = map (\x -> replace x localAssignment) body 
-        localAssignments = assignments groundedRule localRanges localVariables
+        makeMono localAssignment = map (\x -> replace x localAssignment) body
+        localAssignments = assignments (Poly head body) localRanges localVariables
         localVariables = map (\(x, y) -> show x) head -- Only works for 'simple' term variables . there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
-        groundedRule = replace (Poly head body) globalAssignment
         localRanges = Dict.fromList |> map (\(x, y) -> (show x, Dict.findWithDefault (error "Empty sort") y members)) head
 bindPoly any _ globalAssignment = replace any globalAssignment
 
