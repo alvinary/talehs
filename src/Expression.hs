@@ -38,7 +38,7 @@ equalityComparison = Leaf "="
 -------------------------------------------------------------------------------------------
 
 showSeveral :: Show a => [[a]] -> String
-showSeveral xss = intercalate "; \n" (map show xss)
+showSeveral xss = intercalate ";                                           ;" (map show xss)
 
 showInLines xs = putStrLn |> intercalate "\n" (map show xs)
 
@@ -627,18 +627,6 @@ eitherFrom phi psi = [Disjunction both, Contradiction both]
 -- Variables, ground vs non-ground formulas, and assignments -----------------------------
 ------------------------------------------------------------------------------------------
 
-{-
-collectLocal :: Literal a -> [a]
-collectLocal (Poly range literals) vars = Set.toList bigUnion |> map (\x -> collect x vars) range
-collectLocal _ _ = []
-
-cuál es la semantica de y | { p(x, y) }, z { p (x, z) }...
-ahh, cada uno de esos solo 'mira' sus variables locales, y lo concatenás.
-tengo que implementar... substitute para Poly
-Replace! 
-
--}
-
 -- a) check if `check` works with the variables in Poly expressions
 -- b) make test cases for isGround (Poly head body) stateVariables
 
@@ -709,8 +697,6 @@ assignments expression ranges variables = map makeAssignment product `using` par
 getState :: [Declaration] -> State
 getState [] = emptyState
 getState (d:declarations) = stateUpdate d (getState declarations)
-
-polyGrounding _ state = []
 
 unfoldInstance :: State -> [Formula] -> [Formula]
 unfoldInstance state rules = allFunctionEncodings ++ ruleGroundings ++ unaEncoding ++ negationEncoding
