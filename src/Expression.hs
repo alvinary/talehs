@@ -38,7 +38,7 @@ equalityComparison = Leaf "="
 -------------------------------------------------------------------------------------------
 
 showSeveral :: Show a => [[a]] -> String
-showSeveral xss = intercalate ";                                           ;" (map show xss)
+showSeveral xss = intercalate ";                             ;" (map show xss)
 
 showInLines xs = putStrLn |> intercalate "\n" (map show xs)
 
@@ -94,7 +94,6 @@ massFlatten ts = map flatten ts
 -------------------------------------------------------------------------------------------
 
 -- Used for substitutions
-
 type Binding = Dict.Map String Term
 
 -------------------------------------------------------------------------------------------
@@ -677,18 +676,17 @@ groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [Str
 groundingStep expression ranges variables members = map bind allAssignments `using` parListChunk 1000 rdeepseq
     where
         bind binding = bindAny expression fixedMembers binding
-        allAssignments = assignments expression ranges variables
+        allAssignments = assignments expression fixedRanges variables
         !fixedRanges = force ranges
         !fixedMembers = force members
 
 -- Check if `expression` can be substituted with _ there (i.e. if it is not used in the function body)
 assignments :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [Dict.Map String Term]
-assignments expression ranges variables = map makeAssignment product `using` parListChunk 1000 rdeepseq
+assignments expression ranges variables = map makeAssignment product
     where
         product = sequence |> map (\var -> retrieve_ var) |> variables
         makeAssignment xs = Dict.fromList |> zip variables xs
-        retrieve_ var = Dict.findWithDefault [] var fixedRanges
-        !fixedRanges = force ranges
+        retrieve_ var = Dict.findWithDefault [] var ranges
 
 ---------------------------------------------------------------------------------------------------------------
 --- Map Lists of Declarations to States, Map States and Rules to Ground Formulae ------------------------------
