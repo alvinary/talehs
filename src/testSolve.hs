@@ -46,7 +46,7 @@ stato = getState $ map parseDeclaration simpleDeclarations
 funs = Expression.functions $ getState $ map parseDeclaration simpleDeclarations
 
 simpleDeclarations = [abcConstants, xyVars,  "let g : A -> A"]
-simpleRules = ["r(x, y), r(y, z) -> r(x, z)", "r(x, y), r(y, x) -> False", "minimum(x) -> w : A | { p ( x , w ) }", "minimum (a)"]
+simpleRules = ["r(x, y), r(y, z) -> r(x, z)", "r(x, y), r(y, x) -> False", "m(a) -> w : A | { p ( x , w ) }", "m (a)"]
 simpleFormulas = map parseRule simpleRules
 
 sampleState = Expression.getState $ map parseDeclaration simpleDeclarations
@@ -64,13 +64,13 @@ lolodor = (wobtain leForm, Expression.bindAny (gobtain leForm) (Expression.membe
         obtain (Poly head body) = Set.toList $ bigUnion $ map (\(x, y) -> leaves x) head
         obtain _ = []
 
-simpleProgram = map fromDeclaration simpleDeclarations ++ map fromFormula (take 3 simpleRules)
+simpleProgram = map fromDeclaration simpleDeclarations ++ map fromFormula (take 2 simpleRules)
     where
         fromDeclaration d = Dec $ parseDeclaration d
         fromFormula f = For $ parseRule f
 
 wukong = List.intercalate "; \n" $ map show $ Expression.getGamma simpleProgram
 
-woochi = Expression.showSeveral $ map showPositive $ Solve.getModels simpleProgram 20
+woochi = Expression.showInLines $ map showPositive $ Solve.getModels simpleProgram 20
     where
         showPositive m = filter (\x -> not(List.isInfixOf "¬" $ show x)) $ map (\(x, y) -> x) $ filter (\(x, y) -> y == True) $ Map.toList m

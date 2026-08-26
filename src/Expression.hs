@@ -38,9 +38,9 @@ equalityComparison = Leaf "="
 -------------------------------------------------------------------------------------------
 
 showSeveral :: Show a => [[a]] -> String
-showSeveral xss = intercalate ";                             ;" (map show xss)
+showSeveral xss = unlines (map show xss)
 
-showInLines xs = putStrLn |> intercalate "\n" (map show xs)
+showInLines xs = putStrLn |> intercalate "\n\n" (map show xs)
 
 showThing t = show t
 
