@@ -5,6 +5,7 @@ import Parser
 import qualified Data.Text as Text
 import qualified Data.Map as Map
 import qualified Data.List as List
+import qualified Data.Set as Set
 
 parse text = head $ Reader.read $ Parser.tokenize $ Text.pack $ text
 
@@ -45,12 +46,36 @@ stato = getState $ map parseDeclaration simpleDeclarations
 funs = Expression.functions $ getState $ map parseDeclaration simpleDeclarations
 
 simpleDeclarations = [abcConstants, xyVars,  "let g : A -> A"]
-simpleRules = ["r(x, y), r(y, z) -> r(x, z)", "r(x, y), r(y, x) -> False"]
+simpleRules = ["r(x, y), r(y, z) -> r(x, z)", "r(x, y), r(y, x) -> False", "minimum(x) -> w : A | { p ( x , w ) }", "minimum (a)"]
 simpleFormulas = map parseRule simpleRules
 
 sampleState = Expression.getState $ map parseDeclaration simpleDeclarations
 
 wowo = Expression.unfoldInstance sampleState simpleFormulas
+
+lelor = simpleFormulas !! 2
+
+lolodor = (wobtain leForm, Expression.bindPoly (gobtain leForm) (Expression.members sampleState) $ Map.fromList [])
+    where
+        leForm = simpleFormulas !! 2
+        wobtain (Implication a b) = obtain $ head b
+        wobtain _ = ["MUERTE"]
+        gobtain (Implication a b) = head b
+        obtain (Poly head body) = Set.toList $ bigUnion $ map (\(x, y) -> leaves x) head
+        obtain _ = []
+
+{-
+palodor = assignments leForm lesRanges lesVars 
+    where
+        lesValus = retrieve (Expression.ranges sampleState) (Expression.members sampleState)
+        lesRanges = Map.fromList $ map (\(x, y) -> (show x, Map.findWithDefault (error "aaa") (show y) (Expression.ranges sampleState))) head
+        lesVars = wobtain leForm
+        leForm = simpleFormulas !! 2
+        wobtain (Implication a b) = obtain $ head b
+        wobtain _ = ["MUERTE"]
+        obtain (Poly head body) = Set.toList $ bigUnion $ map (\(x, y) -> leaves x) head
+        obtain _ = []
+-}
 
 simpleProgram = map fromDeclaration simpleDeclarations ++ map fromFormula simpleRules
     where
