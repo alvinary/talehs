@@ -2,6 +2,7 @@ import qualified Reader
 import qualified Expression
 import qualified Parser
 import qualified Data.Text as Text
+import qualified TestSolve as Solu
 import System.IO
 import Options.Applicative
 import Control.Monad (join)
@@ -84,9 +85,14 @@ userInput = execParser opts
                     <> progDesc "Find finite models for syntactically restricted first order theories, similar to an answer set programming engine or logic programming language."
                     <> header "Tale.hs" )
 
-main :: IO ()
 main = do
+    putStrLn Solu.wukong
+    return ()
+
+{-
+do
     sessionData <- userInput
     let placeholderOutput = run sessionData
     putStrLn placeholderOutput
     return ()
+-}
