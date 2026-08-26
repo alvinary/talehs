@@ -55,7 +55,7 @@ wowo = Expression.unfoldInstance sampleState simpleFormulas
 
 lelor = simpleFormulas !! 2
 
-lolodor = (wobtain leForm, Expression.bindPoly (gobtain leForm) (Expression.members sampleState) $ Map.fromList [])
+lolodor = (wobtain leForm, Expression.bindAny (gobtain leForm) (Expression.members sampleState) $ Map.fromList [("x", (Expression.Leaf "a"))])
     where
         leForm = simpleFormulas !! 2
         wobtain (Implication a b) = obtain $ head b
@@ -64,7 +64,7 @@ lolodor = (wobtain leForm, Expression.bindPoly (gobtain leForm) (Expression.memb
         obtain (Poly head body) = Set.toList $ bigUnion $ map (\(x, y) -> leaves x) head
         obtain _ = []
 
-simpleProgram = map fromDeclaration simpleDeclarations ++ map fromFormula (take 2 simpleRules)
+simpleProgram = map fromDeclaration simpleDeclarations ++ map fromFormula (take 3 simpleRules)
     where
         fromDeclaration d = Dec $ parseDeclaration d
         fromFormula f = For $ parseRule f

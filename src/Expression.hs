@@ -260,7 +260,9 @@ instance Expression Literal where
 instance Expression Conjunction where
     replace (Mono literal) binding = Mono (replace literal binding)
     replace (Poly head body) binding = Poly (map (\(x, y) -> (replace x binding, replace y binding)) head) (map (\x -> replace x binding) body)
-    bindAny (Poly head body) members binding = bindPoly (replace (Poly head body) binding) members binding
+    bindAny (Poly head body) members binding = bindPoly globalSubstitution members binding
+        where
+            globalSubstitution = (replace (Poly head body) binding)
     leaves (Mono literal) = leaves literal
     leaves (Poly ranges literals) = bigUnion rangeLeaves `union` bigUnion literalLeaves
         where
@@ -270,9 +272,8 @@ instance Expression Conjunction where
     atoms (Poly ranges literals) = bigUnion |> map atoms literals
     collect (Poly ranges literals) vars = Set.difference (bigUnion bodyVariables) (bigUnion rangeVariables)
         where
-            rangeVariables = map (\(x, y) -> Set.union (collect x vars) (collect y vars)) ranges -- TODO: check this
+            rangeVariables = map (\(x, y) -> Set.union (collect x vars) (collect y vars)) ranges
             bodyVariables = map (\x -> collect x vars) literals
-
     allMono (Mono _) = True
     allMono (Poly _ _) = False
 
