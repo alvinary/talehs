@@ -158,7 +158,7 @@ class Ord a => Expression a where
     atoms :: a -> Set Atom
     isGround :: a -> Set String -> Bool
     allMono :: a -> Bool
-    bindAny :: a -> Dict.Map String [Term] -> Binding -> a
+    bindAny :: a -> Dict.Map Term [Term] -> Binding -> a
     bindAny expr _ binding = replace expr binding
     collect expr vars = (leaves expr) `intersection` vars
     isGround expr vars = Set.null (collect expr vars)
@@ -260,7 +260,7 @@ instance Expression Literal where
 instance Expression Conjunction where
     replace (Mono literal) binding = Mono (replace literal binding)
     replace (Poly head body) binding = Poly (map (\(x, y) -> (replace x binding, replace y binding)) head) (map (\x -> replace x binding) body)
-    bindAny (Poly head body) ranges binding = bindPoly (Poly head body) ranges binding
+    bindAny (Poly head body) members binding = bindPoly (Poly head body) members binding
     leaves (Mono literal) = leaves literal
     leaves (Poly ranges literals) = bigUnion rangeLeaves `union` bigUnion literalLeaves
         where
@@ -657,7 +657,7 @@ emptyTerm = (Leaf "")
 
 -- Do the 'partial' grounding without having to check every time if the result is ground. TODO: is this really more efficient?
 unpackAndGround :: (Expression a, NFData a) => a -> State -> Set String -> [a]
-unpackAndGround expression state stateVars = groundingStep expression allRanges expressionVariables
+unpackAndGround expression state stateVars = groundingStep expression allRanges expressionVariables (members state)
     where
         expressionVariables = Set.toList |> collect expression stateVars
         allRanges = Dict.fromList |> map (\v -> (v, getVar v)) expressionVariables
@@ -675,29 +675,32 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 -- TODO: 
 -- a) make sure the way local variables vs global variables are treated is the intended one
 
-bindPoly :: Conjunction -> Dict.Map String [Term] -> Dict.Map String Term -> Conjunction
-bindPoly (Poly head body) ranges globalAssignment = Poly [] |> (concat |> map makeMono localAssignments)
+bindPoly :: Conjunction -> Dict.Map Term [Term] -> Dict.Map String Term -> Conjunction
+bindPoly (Poly head body) members globalAssignment = Poly [] |> (concat |> map makeMono localAssignments)
     where
         makeMono localAssignment = map (\x -> replace x localAssignment) body 
-        localAssignments = assignments (Poly head body) ranges localVariables
-        localVariables = Set.toList |> bigUnion |> map (\(x, y) -> leaves x) head -- Only works for 'simple' term variables . there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
+        localAssignments = assignments groundedRule localRanges localVariables
+        localVariables = map (\(x, y) -> show x) head -- Only works for 'simple' term variables . there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
         groundedRule = replace (Poly head body) globalAssignment
+        localRanges = Dict.fromList |> map (\(x, y) -> (show x, Dict.findWithDefault (error "Empty sort") y members)) head
 bindPoly any _ globalAssignment = replace any globalAssignment
 
-groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [a]
-groundingStep expression ranges variables = map bind allAssignments `using` parListChunk 1000 rdeepseq
+groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> Dict.Map Term [Term] -> [a]
+groundingStep expression ranges variables members = map bind allAssignments `using` parListChunk 1000 rdeepseq
     where
-        bind binding = bindAny expression fixedRanges binding
+        bind binding = bindAny expression fixedMembers binding
         allAssignments = assignments expression ranges variables
         !fixedRanges = force ranges
+        !fixedMembers = force members
 
 -- Check if `expression` can be substituted with _ there (i.e. if it is not used in the function body)
-assignments :: Expression a => a -> Dict.Map String [Term] -> [String] -> [Dict.Map String Term]
-assignments expression ranges variables = map makeAssignment product
+assignments :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [Dict.Map String Term]
+assignments expression ranges variables = map makeAssignment product `using` parListChunk 1000 rdeepseq
     where
         product = sequence |> map (\var -> retrieve_ var) |> variables
         makeAssignment xs = Dict.fromList |> zip variables xs
-        retrieve_ var = Dict.findWithDefault [] var ranges
+        retrieve_ var = Dict.findWithDefault [] var fixedRanges
+        !fixedRanges = force ranges
 
 ---------------------------------------------------------------------------------------------------------------
 --- Map Lists of Declarations to States, Map States and Rules to Ground Formulae ------------------------------
@@ -710,15 +713,12 @@ getState (d:declarations) = stateUpdate d (getState declarations)
 polyGrounding _ state = []
 
 unfoldInstance :: State -> [Formula] -> [Formula]
-unfoldInstance state rules = allFunctionEncodings ++ allMonoGroundings ++ allPolyGroundings ++ unaEncoding ++ negationEncoding
+unfoldInstance state rules = allFunctionEncodings ++ ruleGroundings ++ unaEncoding ++ negationEncoding
     where
         allFunctionEncodings = encodeAllFunctions state
-        allMonoGroundings = concat |> map (\x -> grounding x state) monoRules
+        ruleGroundings = concat |> map (\x -> grounding x state) rules
         unaEncoding = []
         negationEncoding = encodeNegation state rules
-        monoRules = filter allMono rules
-        polyRules = filter (\x -> not |> allMono x) rules
-        allPolyGroundings = concat |> map (\x -> polyGrounding x state) polyRules
 
 encodeAllFunctions :: State -> [Formula]
 encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListChunk 1000 rdeepseq)
