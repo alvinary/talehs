@@ -2,6 +2,8 @@
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 {-# QuasiQuotes #-}
 {-# Language FlexibleContexts #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Expression where
 
