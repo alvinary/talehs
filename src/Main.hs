@@ -91,8 +91,7 @@ userInput = execParser opts
                     <> header "Tale.hs" )
 -}
 main = do
-    let !lala = force Solu.wukong
-    putStrLn "Done"
+    let !lala = force Solu.taoqi
     return ()
 
 {-
