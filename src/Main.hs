@@ -1,11 +1,17 @@
+{-# LANGUAGE BangPatterns #-}
+
 import qualified Reader
 import qualified Expression
 import qualified Parser
 import qualified Data.Text as Text
+import qualified TestSolve as Solu
 import System.IO
 import Options.Applicative
 import Control.Monad (join)
+import qualified Data.Text.IO as TIO
+import Control.DeepSeq (NFData, force)
 
+{-
 data Session = Session {
     programPath :: String,
     models :: Int,
@@ -27,7 +33,7 @@ readParameters params = map splitTuple $ map (Text.splitOn colon)  $ Text.splitO
 
 splitTuple :: [Text.Text] -> (String, Int)
 splitTuple [parameter, value] = (Text.unpack parameter, read $ Text.unpack value)
-splitTuple arg = error ("Expected a list of the form [parameter, value], received instead: " ++ show arg)
+splitTuple arg = error ("Expected a list of the form [parameter, value], received instead: " ++ tshow arg)
 
 statements :: String -> [Expression.Statement]
 statements text = Reader.read $ Parser.tokenize $ Text.pack text
@@ -74,7 +80,7 @@ session = Session
           <> help "Whether to store the output models to a file." )
 
 run :: Session -> String
-run (Session program models parameters relations store) = program ++ show parameters ++ show models ++ show relations
+run (Session program models parameters relations store) = program ++ tshow parameters ++ tshow models ++ tshow relations
 
 userInput :: IO Session
 userInput = execParser opts
@@ -83,10 +89,15 @@ userInput = execParser opts
                     ( fullDesc
                     <> progDesc "Find finite models for syntactically restricted first order theories, similar to an answer set programming engine or logic programming language."
                     <> header "Tale.hs" )
-
-main :: IO ()
+-}
 main = do
+    let !lala = force Solu.taoqi
+    return ()
+
+{-
+do
     sessionData <- userInput
     let placeholderOutput = run sessionData
     putStrLn placeholderOutput
     return ()
+-}

@@ -6,18 +6,19 @@ import SAT.MiniSat
 import qualified Expression
 import qualified Data.Map as Map
 
-getLiteral :: Expression.Conjunction -> Expression.Literal
-getLiteral (Expression.Mono l) = l
-getLiteral _ = error "Cannot extract literals from non-mono conjunct"
+getLiteral :: Expression.Conjunction -> [Expression.Literal]
+getLiteral (Expression.Mono l) = [l]
+getLiteral (Expression.Poly [] body) = body
+getLiteral (Expression.Poly _ body) = error "Cannot extract literals from non-grounded  Poly conjunct"
 
 toLiterals :: Expression.Formula -> [([Expression.Literal], [Expression.Literal])]
-toLiterals (Expression.Contradiction cs) = [(map getLiteral cs, [])]
-toLiterals (Expression.Disjunction cs) = [([], map getLiteral cs)]
+toLiterals (Expression.Contradiction cs) = [(concat $ map getLiteral cs, [])]
+toLiterals (Expression.Disjunction cs) = [([], concat $ map getLiteral cs)]
 toLiterals (Expression.Assertion cs) = concat $ map (\x -> toLiterals (Expression.Implication [] [x])) cs
 toLiterals (Expression.Equivalence cs ks) = toLiterals (Expression.Implication cs ks) ++ toLiterals (Expression.Implication ks cs)
-toLiterals (Expression.Implication hs cs) = map clausify $ map getLiteral cs
+toLiterals (Expression.Implication hs cs) = map clausify $ (concat $ (map getLiteral cs))
     where
-        clausify literal = (hypo, [literal])
+        clausify literal = (concat hypo, [literal])
         hypo = map getLiteral hs
 
 orAll :: [Formula Expression.Literal] -> Formula Expression.Literal

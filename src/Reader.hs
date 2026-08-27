@@ -10,6 +10,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 module Reader where
 
+import qualified Data.Text as T
 import Expression
 import Parser
 import qualified Control.Monad as Happy_Prelude
@@ -354,7 +355,7 @@ happyReduction_28 (HappyAbsSyn18  happy_var_3)
         _
         (HappyAbsSyn18  happy_var_1)
          =  HappyAbsSyn14
-                 (Expression.Comparison happy_var_1 (Leaf "<") happy_var_3
+                 (Expression.Comparison happy_var_1 (Leaf (T.pack "<")) happy_var_3
         )
 happyReduction_28 _ _ _  = notHappyAtAll 
 
@@ -430,9 +431,9 @@ happyReduction_36 (_ `HappyStk`
         ) `HappyStk` happyRest
 
 happyReduce_37 = happySpecReduce_1  13# happyReduction_37
-happyReduction_37 (HappyTerminal (Parser.TokenLeaf happy_var_1))
+happyReduction_37 (HappyTerminal (Parser.TokenLeaf (happy_var_1)))
          =  HappyAbsSyn18
-                 (Expression.Leaf         happy_var_1
+                 (Expression.Leaf      (T.pack happy_var_1)
         )
 happyReduction_37 _  = notHappyAtAll 
 
@@ -446,7 +447,7 @@ happyReduction_38 _
 happyReduction_38 _ _ _  = notHappyAtAll 
 
 happyTerminalToTok term = case term of {
-        Parser.TokenLeaf happy_dollar_dollar -> 2#;
+        Parser.TokenLeaf (happy_dollar_dollar) -> 2#;
         Parser.TokenNot -> 3#;
         Parser.TokenArrow -> 4#;
         Parser.TokenIff -> 5#;

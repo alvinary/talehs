@@ -1,6 +1,7 @@
 {
 module Reader where
 
+import qualified Data.Text as T
 import Expression
 import Parser
 }
@@ -20,7 +21,7 @@ import Parser
 %right 'x'
 
 %token
-leaf     { Parser.TokenLeaf $$ }        
+leaf     { Parser.TokenLeaf ($$) }        
 not      { Parser.TokenNot }
 arrow    { Parser.TokenArrow }
 iff      { Parser.TokenIff }
@@ -87,7 +88,7 @@ Literal : not Atom                                { Expression.Negative $2 }
         | Atom                                    { Expression.Positive $1 }
 
 Atom : Term '(' TermSequence ')'        { Expression.Relation $1 $3                }
-     | Term Comparison Term             { Expression.Comparison $1 (Leaf "<") $3   }
+     | Term Comparison Term             { Expression.Comparison $1 (Leaf (T.pack "<")) $3   }
 
 TermPairSequence : Term ':' Term                       { [($1, $3)] }
                  | TermPairSequence ',' Term ':' Term  { $1 ++ [($3, $5)] }
@@ -100,5 +101,5 @@ Crosses       : Term                    {    [$1]    }
 
 Term  : Term '.' Term                   { Expression.Attribute $1 $3 }
       | Term '[' TermSequence ']'       { Expression.Index     $1 $3 }
-      | leaf                            { Expression.Leaf         $1 }
+      | leaf                            { Expression.Leaf      (T.pack $1) }
       | '(' Term ')'                    { $2                         }

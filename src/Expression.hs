@@ -2,6 +2,8 @@
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 {-# QuasiQuotes #-}
 {-# Language FlexibleContexts #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Expression where
 
@@ -11,15 +13,15 @@ import qualified Data.Text as T
 import qualified Data.Time as Time
 import qualified Data.Set as Set
 import qualified Data.Map as Dict
+import qualified Data.Text.IO as TIO
 import Data.Set (union, difference, intersection, member)
-import Data.List (intercalate, isInfixOf)
+import Data.Text (intercalate, isInfixOf)
 import Data.Set (Set)
 import Data.Char (isDigit)
 import Numeric (showBin)
-import Prelude (putStrLn)
 
 import Control.Parallel.Strategies (parListChunk, rdeepseq, using, NFData)
-import Control.DeepSeq (NFData)
+import Control.DeepSeq (NFData, force)
 import GHC.Generics (Generic)
 
 infixr 0 |>
@@ -37,12 +39,16 @@ equalityComparison = Leaf "="
 -- Utility functions ----------------------------------------------------------------------
 -------------------------------------------------------------------------------------------
 
-showSeveral :: Show a => [[a]] -> String
-showSeveral xss = intercalate "; \n" (map show xss)
+showSeveral :: TShow a => [[a]] -> T.Text
+showSeveral xss = T.unlines (map ttshow xss)
 
-showInLines xs = putStrLn |> intercalate "\n" (map show xs)
+ttshow :: TShow a => [a] -> T.Text
+ttshow [] = ""
+ttshow xs = intercalate ", " |> map tshow xs
 
-showThing t = show t
+showInLines xs = TIO.putStrLn |> intercalate "\n\n" (map tshow xs)
+
+showThing t = tshow t
 
 -- Map an integer to a list with its binary digits (in the usual order)
 -- TODO: in which order?
@@ -52,17 +58,12 @@ binaryDigits n = map readDigit (showBin n "")
         readDigit d | d == '0' = 0
         readDigit d | d > '0' = 1
 
+isSequenceOfDigits :: T.Text -> Bool
+isSequenceOfDigits s = T.all isDigit s
+
 -- Minimum b such that 2**b >= n
 logTwoCeiling :: Int -> Int
 logTwoCeiling n = ceiling |> logBase 2 (fromIntegral n)
-
--- Self-explanatory
-isSubstring :: String -> String -> Bool
-isSubstring = isInfixOf
-
--- Check if a string contains only digits
-isSequenceOfDigits :: String -> Bool
-isSequenceOfDigits s = all isDigit s
 
 -- Union of a list of sets
 bigUnion :: Ord a => [Set a] -> Set a
@@ -82,11 +83,11 @@ split (k:ks) val map = split ks val newMap
         newMap = Dict.insert k val map
 
 -- Show a term as a string
-flatten :: Term -> String
-flatten t = show t
+flatten :: Term -> T.Text
+flatten t = tshow t
 
 -- Map a list of terms to a list of strings
-massFlatten :: [Term] -> [String]
+massFlatten :: [Term] -> [T.Text]
 massFlatten ts = map flatten ts
 
 -------------------------------------------------------------------------------------------
@@ -94,14 +95,13 @@ massFlatten ts = map flatten ts
 -------------------------------------------------------------------------------------------
 
 -- Used for substitutions
-
-type Binding = Dict.Map String Term
+type Binding = Dict.Map T.Text Term
 
 -------------------------------------------------------------------------------------------
 -- Types of expressions (terms and formulas) ----------------------------------------------
 -------------------------------------------------------------------------------------------
 
-data Term = Leaf String
+data Term = Leaf T.Text
           | Attribute Term Term
           | Index Term [Term]
           | Operation Term Term Term
@@ -125,45 +125,56 @@ data Formula = Assertion [Conjunction]
              | Contradiction [Conjunction]
              | Disjunction [Conjunction]
     deriving (Eq, Ord, Generic, NFData)
- 
-instance Show Term where
-    show (Leaf s) = s
-    show (Attribute t1 t2) = (show t1) ++ "." ++ (show t2)
-    show (Index t ts) = (show t) ++ "[" ++ (intercalate ", " (map show ts)) ++ "]"
-    show (Operation t1 op t2) = show t1 ++ " " ++ show op ++ " " ++ show t2
 
-instance Show Atom where
-    show (Relation t ts) = show t ++ " (" ++ (intercalate ", " (map show ts)) ++ ")"
-    show (Comparison t1 comp t2) = show t1 ++ " " ++ show comp ++ " " ++ show t2
+instance TShow a => TShow [a] where
+    tshow xs = T.intercalate ", " (map tshow xs) 
  
-instance Show Literal where
-    show (Positive atom) = show atom
-    show (Negative atom) = "¬" ++ show atom
- 
-instance Show Conjunction where
-    show (Mono literal) = show literal
-    show (Poly ts ls) = (intercalate ", " (map (\(x, y) -> show x ++ ":" ++ show y) ts)) ++ " | { " ++ (intercalate ", " (map show ls)) ++ " }"
+instance TShow Term where
+    tshow (Leaf s) = s
+    tshow (Attribute t1 t2) = (tshow t1) <> "." <> (tshow t2)
+    tshow (Index t ts) = (tshow t) <> "[" <> (intercalate ", " (map tshow ts)) <> "]"
+    tshow (Operation t1 op t2) = tshow t1 <> " " <> tshow op <> " " <> tshow t2
 
-instance Show Formula where
-    show (Assertion conjuncts) = intercalate ", " (map show conjuncts)
-    show (Contradiction conjuncts) = intercalate ", " (map show conjuncts) ++ " => False"
-    show (Disjunction conjuncts) = intercalate " v " (map show conjuncts)
-    show (Implication hypo conc) = intercalate ", " (map show hypo) ++ " => " ++ intercalate ", " (map show conc)
-    show (Equivalence lhs rhs) = intercalate ", " (map show lhs) ++ " <=> " ++ intercalate ", " (map show rhs)
+instance TShow Atom where
+    tshow (Relation t ts) = tshow t <> " (" <> (intercalate ", " (map tshow ts)) <> ")"
+    tshow (Comparison t1 comp t2) = tshow t1 <> " " <> tshow comp <> " " <> tshow t2
+ 
+instance TShow Literal where
+    tshow (Positive atom) = tshow atom
+    tshow (Negative atom) = "¬" <> tshow atom
+ 
+instance TShow Conjunction where
+    tshow (Mono literal) = tshow literal
+    tshow (Poly ts ls) = (intercalate ", " (map (\(x, y) -> tshow x <> ":" <> tshow y) ts)) <> " | { " <> (intercalate ", " (map tshow ls)) <> " }"
+
+instance TShow Formula where
+    tshow (Assertion conjuncts) = intercalate ", " (map tshow conjuncts)
+    tshow (Contradiction conjuncts) = intercalate ", " (map tshow conjuncts) <> " => False"
+    tshow (Disjunction conjuncts) = intercalate " v " (map tshow conjuncts)
+    tshow (Implication hypo conc) = intercalate ", " (map tshow hypo) <> " => " <> intercalate ", " (map tshow conc)
+    tshow (Equivalence lhs rhs) = intercalate ", " (map tshow lhs) <> " <=> " <> intercalate ", " (map tshow rhs)
+
+class TShow a where
+    tshow :: a -> T.Text
 
 class Ord a => Expression a where
     replace :: a -> Binding -> a
-    collect :: a -> Set String -> Set String
-    leaves :: a -> Set String
+    collect :: a -> Set T.Text -> Set T.Text
+    leaves :: a -> Set T.Text
     atoms :: a -> Set Atom
-    isGround :: a -> Set String -> Bool
+    isGround :: a -> Set T.Text -> Bool
     allMono :: a -> Bool
+    bindAny :: a -> Dict.Map Term [Term] -> Binding -> a
+    mapLeaves :: a -> (Term -> Term) -> a
+    bindAny expr _ binding = replace expr binding
     collect expr vars = (leaves expr) `intersection` vars
     isGround expr vars = Set.null (collect expr vars)
 
 instance Expression Term where
 
-    replace term binding | Dict.member (show term) binding = Dict.findWithDefault (Leaf "error") (show term) binding
+    mapLeaves term f = f term
+
+    replace term binding | Dict.member (tshow term) binding = Dict.findWithDefault (Leaf "error") (tshow term) binding
 
     replace (Leaf name) binding = Dict.findWithDefault (Leaf name) name binding
     
@@ -183,7 +194,7 @@ instance Expression Term where
             op_ = replace op binding 
             t2_ = replace t2 binding
 
-    collect term vars | (show term) `member` vars = Set.singleton (show term)
+    collect term vars | (tshow term) `member` vars = Set.singleton (tshow term)
 
     collect (Leaf name) vars | name `member` vars = Set.singleton name
     
@@ -226,6 +237,18 @@ instance Expression Term where
     allMono term = True
 
 instance Expression Atom where
+
+    mapLeaves (Relation pred args) f = (Relation pred_ args_)
+        where
+            pred_ = mapLeaves pred f
+            args_ = map (\x -> mapLeaves x f) args
+    
+    mapLeaves (Comparison left comp right) f = (Comparison left_ comp_ right_)
+        where
+            left_ = mapLeaves left f
+            right_ = mapLeaves right f
+            comp_ = mapLeaves comp f
+
     replace (Relation pred args) binding = (Relation pred_ args_)
         where
             pred_ = replace pred binding
@@ -242,6 +265,12 @@ instance Expression Atom where
     allMono atom = True
 
 instance Expression Literal where
+    mapLeaves (Positive at) f = Positive at_
+        where
+            at_ = mapLeaves at f
+    mapLeaves (Negative at) f = Negative at_
+        where
+            at_ = mapLeaves at f
     replace (Positive at) binding = Positive at_
         where
             at_ = replace at binding
@@ -256,7 +285,16 @@ instance Expression Literal where
     allMono literal = True
 
 instance Expression Conjunction where
+    mapLeaves (Mono literal) f = Mono (mapLeaves literal f)
+    mapLeaves (Poly head body) f = Poly head_ body_
+        where
+            head_ = map (\(x, y) -> (mapLeaves x f, mapLeaves y f)) head
+            body_ = map (\x -> mapLeaves x f) body
     replace (Mono literal) binding = Mono (replace literal binding)
+    replace (Poly head body) binding = Poly (map (\(x, y) -> (replace x binding, replace y binding)) head) (map (\x -> replace x binding) body)
+    bindAny (Poly head body) members binding = bindPoly globalSubstitution members binding
+        where
+            globalSubstitution = (replace (Poly head body) binding)
     leaves (Mono literal) = leaves literal
     leaves (Poly ranges literals) = bigUnion rangeLeaves `union` bigUnion literalLeaves
         where
@@ -266,13 +304,36 @@ instance Expression Conjunction where
     atoms (Poly ranges literals) = bigUnion |> map atoms literals
     collect (Poly ranges literals) vars = Set.difference (bigUnion bodyVariables) (bigUnion rangeVariables)
         where
-            rangeVariables = map (\(x, y) -> Set.union (collect x vars) (collect y vars)) ranges -- TODO: check this
+            rangeVariables = map (\(x, y) -> Set.union (collect x vars) (collect y vars)) ranges
             bodyVariables = map (\x -> collect x vars) literals
-
     allMono (Mono _) = True
     allMono (Poly _ _) = False
 
 instance Expression Formula where
+
+    mapLeaves (Assertion conjuncts) f = Assertion conjuncts_
+        where
+            mapLeaves_ x = mapLeaves x f
+            conjuncts_ = map mapLeaves_ conjuncts
+    mapLeaves (Implication hypo conc) f = Implication hypo_ conc_
+        where
+            mapLeaves_ x = mapLeaves x f
+            hypo_ = map mapLeaves_ hypo
+            conc_ = map mapLeaves_ conc
+    mapLeaves (Contradiction conjuncts) f = Contradiction conjuncts_
+        where
+            mapLeaves_ x = mapLeaves x f
+            conjuncts_ = map mapLeaves_ conjuncts
+    mapLeaves (Equivalence lhs rhs) f = Equivalence lhs_ rhs_
+        where
+            mapLeaves_ x = mapLeaves x f
+            lhs_ = map mapLeaves_ lhs
+            rhs_ = map mapLeaves_ rhs
+    mapLeaves (Disjunction conjuncts) f = Disjunction conjuncts_
+        where
+            mapLeaves_ x = mapLeaves x f
+            conjuncts_ = map mapLeaves_ conjuncts
+
     replace (Assertion conjuncts) binding = Assertion conjuncts_
         where
             replace_ x = replace x binding
@@ -324,9 +385,14 @@ data Declaration = Constant [Term] Term        -- const a, b, c : A
                  | Assignment Term Term        -- let a.f = b
                  | Module Term [(Term, Term)]  -- bind Module with { Module.A = Here.A }
                  | Parameters [Term]           -- params
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord)
+
+instance TShow Declaration where
+    tshow d = ""
 
 instance Expression Declaration where
+
+    mapLeaves d f = d
 
     replace (Constant ts t) binding = (Constant ts_ t_)
         where
@@ -388,9 +454,9 @@ instance Expression Declaration where
 data Statement = Dec Declaration
                | For Formula
 
-instance Show Statement where
-        show (Dec d) = show d
-        show (For f) = show f
+instance TShow Statement where
+        tshow (Dec d) = tshow d
+        tshow (For f) = tshow f
 
 -------------------------------------------------------------------------------------------
 -- State and state updates ----------------------------------------------------------------
@@ -398,19 +464,21 @@ instance Show Statement where
 
 data State = State {
     members	   :: Dict.Map Term [Term],      -- Map the name of a sort to a collection with its members
-	variables  :: [String],                  -- Keep track of all names that are intended to be interpreted as variables
-	ranges     :: Dict.Map String Term,      -- Map a variable name (a string) to the name of the sort (a term) it ranges over 
+	variables  :: [T.Text],                  -- Keep track of all names that are intended to be interpreted as variables
+	ranges     :: Dict.Map T.Text Term,      -- Map a variable name (a string) to the name of the sort (a term) it ranges over 
 	functions  :: [Term],                    -- Keep track of the terms that are intended to be interpreted as functions
 	images     :: Dict.Map Term Term,        -- Map the name of a function to the names of the sorts its image belongs to
     domains    :: Dict.Map Term [Term],      -- Map the name of a function to the names of the sorts whose product contains the functions' domain
 	parameters :: Dict.Map Term Int,         -- Map parameters to their values
 	indices    :: Dict.Map Term [Term],      -- Map the head of an indexed term to the signature of its indices
     values     :: Dict.Map (Term, Term) Term -- Map f t to f(t)
-} deriving (Show)
+}
 
 emptyState = State Dict.empty [] Dict.empty [] Dict.empty Dict.empty Dict.empty Dict.empty Dict.empty
 
 -- Functions used to ensure evaluation terminates / there are no cyclic declarations -----
+
+{-
 
 reservedWords = ["->", "let", "const", "var", "(", ")", "[", "]", ":", ",", ".", "False", "order", "=", "<"]
 
@@ -434,7 +502,7 @@ sampleDeclarations = [
     words |> removeReserved "a g"   -- "params m n"
     ]
 
-termDependencies :: String -> [[String]] -> Set String
+termDependencies :: T.Text -> [[T.Text]] -> Set T.Text
 termDependencies x xss = allDependencies x xss `difference` Set.fromList reservedWords
  
 directDependencies :: (Eq a, Ord a) => a -> [[a]] -> Set a
@@ -462,15 +530,17 @@ sourceCandidates (Variable vars sort) = map (\v -> (v, sort)) vars
 sourceCandidates (Assignment t1 t2) = [(t1, t2)]
 sourceCandidates (Module moduleName bindings) = []
 
-collectAllVariables :: [Declaration] -> Set String
+collectAllVariables :: [Declaration] -> Set T.Text
 collectAllVariables declarations = bigUnion |> map leaves |> filter isVariableDeclaration declarations
 
 isVariableDeclaration :: Declaration -> Bool
 isVariableDeclaration (Variable _ _) = True
 isVariableDeclaration _ = False
 
-collectDependencies :: [Declaration] -> Dict.Map String [String]
+collectDependencies :: [Declaration] -> Dict.Map T.Text [Text]
 collectDependencies declarations = Dict.fromList []
+
+-}
 
 ------------------------------------------------------------------------------------------
 
@@ -496,10 +566,10 @@ addTotalOrder prefix size sort state = state { members = newMembers, values = ne
         newMembers = fuse sort totalOrder (members state)
         newValues = Dict.union (values state) valuesMap     -- pisa a la izq? -- deberiamos tirar una warning si se pisan values?
         totalOrder = map (\t -> Index prefix [t]) rangeTerms
-        rangeTerms = map (\i -> Leaf |> show i) [1..sizeValue]
+        rangeTerms = map (\i -> Leaf |> T.pack |> show i) [1..sizeValue]
         sizeValue = asSize size state
         valuesMap = Dict.fromList |> map makeValue [1..(sizeValue - 1)]  -- 
-        makeValue i = ((Index prefix [Leaf |> show i], next), Index prefix [Leaf |> show |> i + 1])    -- (i, next) = i + 1
+        makeValue i = ((Index prefix [Leaf |> T.pack |> show i], next), Index prefix [Leaf |> T.pack |> show |> i + 1])    -- (i, next) = i + 1
         next = Leaf "next"
 
 addFunction :: Term -> [Term] -> Term -> State -> State
@@ -512,13 +582,21 @@ addFunction f domain image state = state { images = newImages, domains = newDoma
 -- If a term has an interpretation as an integer (it is either a sequence of digits or a parameter),
 -- return that integer. Otherwise, raise an exception.
 asSize :: Term -> State -> Int
-asSize (Leaf a) state | isSequenceOfDigits a = read a
+asSize (Leaf a) state | isSequenceOfDigits a = read |> T.unpack a
 asSize term state | Dict.member term (parameters state) = Dict.findWithDefault 0 term (parameters state)
 asSize _ state = error "In order to be converted to a size, a term must be either a sequence of digits or a parameter."
 
 ---------------------------------------------------------------------------------------
 -- Encodings and Formulas -------------------------------------------------------------
 ---------------------------------------------------------------------------------------
+
+-- Evaluate all dot terms using the values in State
+evaluate :: Expression a => a -> State -> a
+evaluate expression state = mapLeaves expression evalTerms
+    where
+        evalTerms :: Term -> Term
+        evalTerms (Attribute t s) = Dict.findWithDefault (Leaf "error") (t, s) (values state)
+        evalTerms t = t
 
 -- Encode the unique name assumption for a list of terms as a list of formulas
 
@@ -538,7 +616,7 @@ uniqueNameAssumption terms = concat |> map unaFormula |> sequence [terms, terms]
 encodeFunction :: Term -> [[Term]] -> [Term] -> [Formula]
 encodeFunction functionName domain image = encodeValues ++ encodeBounds 
     where
-        encodeValues = concat |> (map (\args -> encodeDomainElement functionName args image) domain `using` parListChunk 1000 rdeepseq)
+        encodeValues = concat |> (map (\args -> encodeDomainElement functionName args image) domain `using` parListChunk 10000 rdeepseq)
         encodeBounds = forbidOffBounds functionName firstOffBounds lastOffBounds domain imageSize -- TODO: los nombres están swappeados
         imageSize = length image
         firstOffBounds = imageSize                    -- TODO: Oboe
@@ -564,8 +642,8 @@ elementBits f elem n max = map bitAtom |> zip elementBits [0..w]
         fBitsPredicate i = Index bitsTerm [f, indexTerm i]
         elementArguments = elem ++ elementBits
         bitsTerm = Leaf "bits"
-        indexTerm i = Leaf |> show i
-        elementBits = padding ++ (map (\x -> Leaf |> show x) |> binaryDigits n)
+        indexTerm i = Leaf |> T.pack |> show i
+        elementBits = padding ++ (map (\x -> Leaf |> T.pack |> show x) |> binaryDigits n)
         w = logTwoCeiling max
         paddingSize = w - (length |> binaryDigits n)
         padding = map (\x -> Leaf "0") [0..paddingSize]
@@ -587,7 +665,7 @@ bitConstraints :: Term -> [Term] -> Int -> [Formula]
 bitConstraints f args m = concat |> map bitFormulas bitIndices
     where
         bitFormulas index = eitherFrom (bitPredicate index valueZero) (bitPredicate index valueOne)
-        bitIndices = map (\i -> Leaf |> show i) [1..logM] -- TODO: oboe
+        bitIndices = map (\i -> Leaf |> T.pack |> show i) [1..logM] -- TODO: oboe
         indexTerm index = Index (Leaf "bits") [f, index]
         valueZero = [(Leaf "0")]
         valueOne = [(Leaf "1")]
@@ -623,22 +701,15 @@ eitherFrom phi psi = [Disjunction both, Contradiction both]
 -- Variables, ground vs non-ground formulas, and assignments -----------------------------
 ------------------------------------------------------------------------------------------
 
-{-
-collectLocal :: Literal a -> [a]
-collectLocal (Poly range literals) vars = Set.toList bigUnion |> map (\x -> collect x vars) range
-collectLocal _ _ = []
-
-cuál es la semantica de y | { p(x, y) }, z { p (x, z) }...
-ahh, cada uno de esos solo 'mira' sus variables locales, y lo concatenás.
-tengo que implementar... substitute para Poly
-Replace! 
-
--}
-
 -- a) check if `check` works with the variables in Poly expressions
 -- b) make test cases for isGround (Poly head body) stateVariables
+
+------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------------
+
 grounding :: (Expression a, NFData a) => a -> State -> [a]
-grounding expression state | check expression = [expression]
+grounding expression state | check expression = [expression] -- [evaluate expression state], to evaluate dot terms
     where
         check expression_ = isGround expression_ stateVariables
         stateVariables = Set.fromList |> variables state      
@@ -650,9 +721,9 @@ grounding expression state | otherwise = concat |> map (\x -> grounding x state)
 emptyTerm :: Term -- TODO: parser must reject empty terms. Ensure it does, ensure that's known.
 emptyTerm = (Leaf "")
 
--- Do the 'partial' frounding without having to check every time if the result is ground. TODO: is this really more efficient?
-unpackAndGround :: (Expression a, NFData a) => a -> State -> Set String -> [a]
-unpackAndGround expression state stateVars = groundingStep expression allRanges expressionVariables
+-- Do the 'partial' grounding without having to check every time if the result is ground. TODO: is this really more efficient?
+unpackAndGround :: (Expression a, NFData a) => a -> State -> Set T.Text -> [a]
+unpackAndGround expression state stateVars = groundingStep expression allRanges expressionVariables (members state)
     where
         expressionVariables = Set.toList |> collect expression stateVars
         allRanges = Dict.fromList |> map (\v -> (v, getVar v)) expressionVariables
@@ -660,39 +731,37 @@ unpackAndGround expression state stateVars = groundingStep expression allRanges 
 
 --------------------------------------------------------------------------------------------------------------
 
-retrieve :: Dict.Map String Term -> Dict.Map Term [Term] -> (String -> [Term])
+retrieve :: Dict.Map T.Text Term -> Dict.Map Term [Term] -> (T.Text -> [Term])
 retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefault emptyTerm var ranges_) members_)
 
 --------------------------------------------------------------------------------------------------------------
 
--- TODO: Try to group all rules with the same variable signature to make all assignments for that signature just once
-
--- TODO: 
--- a) make sure the way local variables vs global variables are treated is the intended one
-bindPoly :: Conjunction -> Dict.Map String [Term] -> Dict.Map String Term -> [Conjunction]
-bindPoly (Poly head body) ranges globalAssignment = concat |> map (groundBody body) localAssignments
+bindPoly :: Conjunction -> Dict.Map Term [Term] -> Dict.Map T.Text Term -> Conjunction
+bindPoly (Poly head body) members globalAssignment = Poly [] |> (concat |> map makeMono localAssignments)
     where
-        groundBody :: [Literal] -> Binding -> [Conjunction]
-        groundBody body localBinding = map (\literal -> groundLiteral literal localBinding) body
-        groundLiteral :: Literal -> Binding -> Conjunction
-        groundLiteral literal localBinding = replace (Mono literal) (Dict.union localBinding globalAssignment)
-        localAssignments = assignments (Poly head body) ranges localVariables
-        localVariables = Set.toList |> bigUnion |> map (\(x, y) -> Set.union (leaves x) (leaves y)) head -- there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
-bindPoly e r a = error |> "Cannot apply binding for Polyadic expressions to non-Polyadic expression " ++ show e
+        makeMono localAssignment = map (\x -> replace x localAssignment) body
+        localAssignments = assignments (Poly head body) localRanges localVariables
+        localVariables = map (\(x, y) -> tshow x) head -- Only works for 'simple' term variables . there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
+        localRanges = Dict.fromList |> map (\(x, y) -> (tshow x, Dict.findWithDefault (error "Empty sort") y members)) head
+bindPoly any _ globalAssignment = replace any globalAssignment
 
-groundingStep :: (Expression a, NFData a) => a -> Dict.Map String [Term] -> [String] -> [a]
-groundingStep expression ranges variables = map bind allAssignments `using` parListChunk 1000 rdeepseq
+groundingStep :: (Expression a, NFData a) => a -> Dict.Map T.Text [Term] -> [T.Text] -> Dict.Map Term [Term] -> [a]
+groundingStep expression ranges variables members = map bind allAssignments `using` parListChunk 1000 rdeepseq
     where
-        bind binding = replace expression binding
-        allAssignments = assignments expression ranges variables
+        bind binding = bindAny expression fixedMembers binding
+        allAssignments = assignments expression fixedRanges variables
+        !fixedRanges = force ranges
+        !fixedMembers = force members
 
 -- Check if `expression` can be substituted with _ there (i.e. if it is not used in the function body)
-assignments :: Expression a => a -> Dict.Map String [Term] -> [String] -> [Dict.Map String Term]
+assignments :: (Expression a, NFData a) => a -> Dict.Map T.Text [Term] -> [T.Text] -> [Dict.Map T.Text Term]
 assignments expression ranges variables = map makeAssignment product
     where
         product = sequence |> map (\var -> retrieve_ var) |> variables
         makeAssignment xs = Dict.fromList |> zip variables xs
         retrieve_ var = Dict.findWithDefault [] var ranges
+
+---------------------------------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------------------------------
 --- Map Lists of Declarations to States, Map States and Rules to Ground Formulae ------------------------------
@@ -702,18 +771,13 @@ getState :: [Declaration] -> State
 getState [] = emptyState
 getState (d:declarations) = stateUpdate d (getState declarations)
 
-polyGrounding _ state = []
-
 unfoldInstance :: State -> [Formula] -> [Formula]
-unfoldInstance state rules = allFunctionEncodings ++ allMonoGroundings ++ allPolyGroundings ++ unaEncoding ++ negationEncoding
+unfoldInstance state rules = allFunctionEncodings ++ ruleGroundings ++ unaEncoding ++ negationEncoding
     where
         allFunctionEncodings = encodeAllFunctions state
-        allMonoGroundings = concat |> map (\x -> grounding x state) monoRules
+        ruleGroundings = concat |> map (\x -> grounding x state) rules
         unaEncoding = []
         negationEncoding = encodeNegation state rules
-        monoRules = filter allMono rules
-        polyRules = filter (\x -> not |> allMono x) rules
-        allPolyGroundings = concat |> map (\x -> polyGrounding x state) polyRules
 
 encodeAllFunctions :: State -> [Formula]
 encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListChunk 1000 rdeepseq)
@@ -726,6 +790,9 @@ encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListC
         getImage f = sortMembers |> Dict.findWithDefault (Leaf "") f (images state)
         getDomain f = sequence |> map sortMembers |> Dict.findWithDefault [] f (domains state)
 
+-- TODO: negation does not handle all cases of Poly grounding
+-- The solution is to map all Poly subexpressions to a list of [(atom, local variables)],
+-- create dummy global variables with the same ranges, and unfold negation for those
 encodeNegation :: State -> [Formula] -> [Formula]
 encodeNegation state rules = concat |> map negationClauses allAtoms
     where
@@ -750,10 +817,10 @@ getRules [] = []
 getRules ((For f):statements) = f:(getRules statements)
 getRules (_:statements) = getRules statements
 
+--------------------------------------------------------------------------------------
+
 programState :: [Statement] -> State
 programState program = getState |> getDeclarations |> program
-
---------------------------------------------------------------------------------------
 
 getGamma :: [Statement] -> [Formula]
 getGamma program = unfoldInstance state rules
@@ -782,18 +849,25 @@ getGamma program = unfoldInstance state rules
 -- ERROR DE SINTAXIS
 
 -- DECLARACIONES CÍCLICAS
+-- El grafo de depenendencias de las declaraciones no es acíclico
 
 -- DECLARACIÓN DE VARIABLE INCONSISTENTE
+-- Se declara dos veces una misma variables con distinto rango
 
 -- DECLARACIÓN DE FUNCIÓN INCONSISTENTE (mismo dominio, distinta imagen)
 
 -- MÓDULO NO ENCONTRADO
 
 -- ATRIBUTO SIN DEFINICIÓN
+-- Al intentar evaluar a.f, se encuentra que el mapa de valores no tiene un atributo f definido para el término a
 
 -- TÉRMINO EN DECLARACIÓN DE ORDEN TOTAL NO ES UN NÚMERO
+-- El término que usaste para definir un orden total no se puede interpretar como un cardinal
 
 -- LHS DE DECLARACIÓN DE ASIGNACIÓN NO ES UN ATRIBUTO
+-- tenés a = b, pero a no es de la forma c.f
+
+-- LAS VARIABLES LOCALES NO DEBEN SER VARIABLES REGISTRADAS COMO VARIABLES GLOBALES DE LA ESPECIFICACIÓN
 
 -----------------------------------------------------------------------
 -- ADVERTENCIAS -------------------------------------------------------
