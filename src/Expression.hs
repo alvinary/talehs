@@ -28,6 +28,9 @@ infixr 0 |>
 (|>) :: (a -> b) -> a -> b
 (|>) f a = f a
 
+-- TODO: separate rules with / without attributes and do not apply evaluate on the ones without
+-- TODO: determine the number of times you need to ground instead of checking every time
+
 -------------------------------------------------------------------------------------------
 -- Definitions of distinguished terms that work as special constants and names of ---------
 -- special relations, operations, and functions -------------------------------------------
@@ -709,7 +712,7 @@ eitherFrom phi psi = [Disjunction both, Contradiction both]
 ------------------------------------------------------------------------------------------
 
 grounding :: (Expression a, NFData a) => a -> State -> [a]
-grounding expression state | check expression = [expression] -- [evaluate expression state], to evaluate dot terms
+grounding expression state | check expression = [evaluate expression state] -- [evaluate expression state], to evaluate dot terms
     where
         check expression_ = isGround expression_ stateVariables
         stateVariables = Set.fromList |> variables state      
