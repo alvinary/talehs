@@ -165,11 +165,14 @@ class Ord a => Expression a where
     isGround :: a -> Set T.Text -> Bool
     allMono :: a -> Bool
     bindAny :: a -> Dict.Map Term [Term] -> Binding -> a
+    mapLeaves :: a -> (Term -> Term) -> a
     bindAny expr _ binding = replace expr binding
     collect expr vars = (leaves expr) `intersection` vars
     isGround expr vars = Set.null (collect expr vars)
 
 instance Expression Term where
+
+    mapLeaves term f = f term
 
     replace term binding | Dict.member (tshow term) binding = Dict.findWithDefault (Leaf "error") (tshow term) binding
 
@@ -234,6 +237,18 @@ instance Expression Term where
     allMono term = True
 
 instance Expression Atom where
+
+    mapLeaves (Relation pred args) f = (Relation pred_ args_)
+        where
+            pred_ = mapLeaves pred f
+            args_ = map (\x -> mapLeaves x f) args
+    
+    mapLeaves (Comparison left comp right) f = (Comparison left_ comp_ right_)
+        where
+            left_ = mapLeaves left f
+            right_ = mapLeaves right f
+            comp_ = mapLeaves comp f
+
     replace (Relation pred args) binding = (Relation pred_ args_)
         where
             pred_ = replace pred binding
@@ -250,6 +265,12 @@ instance Expression Atom where
     allMono atom = True
 
 instance Expression Literal where
+    mapLeaves (Positive at) f = Positive at_
+        where
+            at_ = mapLeaves at f
+    mapLeaves (Negative at) f = Negative at_
+        where
+            at_ = mapLeaves at f
     replace (Positive at) binding = Positive at_
         where
             at_ = replace at binding
@@ -264,6 +285,11 @@ instance Expression Literal where
     allMono literal = True
 
 instance Expression Conjunction where
+    mapLeaves (Mono literal) f = Mono (mapLeaves literal f)
+    mapLeaves (Poly head body) = Poly head_ body_
+        where
+            head_ = map (\x, y -> (mapLeaves x f, mapLeaves y f)) body
+            body_ = map (\x -> mapLeaves x f) body
     replace (Mono literal) binding = Mono (replace literal binding)
     replace (Poly head body) binding = Poly (map (\(x, y) -> (replace x binding, replace y binding)) head) (map (\x -> replace x binding) body)
     bindAny (Poly head body) members binding = bindPoly globalSubstitution members binding
@@ -284,6 +310,30 @@ instance Expression Conjunction where
     allMono (Poly _ _) = False
 
 instance Expression Formula where
+
+    mapLeaves (Assertion conjuncts) f = Assertion conjuncts_
+        where
+            mapLeaves_ x = mapLeaves x f
+            conjuncts_ = map mapLeaves_ conjuncts
+    mapLeaves (Implication hypo conc) f = Implication hypo_ conc_
+        where
+            mapLeaves_ x = mapLeaves x f
+            hypo_ = map mapLeaves_ hypo
+            conc_ = map mapLeaves_ conc
+    mapLeaves (Contradiction conjuncts) f = Contradiction conjuncts_
+        where
+            mapLeaves_ x = mapLeaves x f
+            conjuncts_ = map mapLeaves_ conjuncts
+    mapLeaves (Equivalence lhs rhs) f = Equivalence lhs_ rhs_
+        where
+            mapLeaves_ x = mapLeaves x f
+            lhs_ = map mapLeaves_ lhs
+            rhs_ = map mapLeaves_ rhs
+    mapLeaves (Disjunction conjuncts) f = Disjunction conjuncts_
+        where
+            mapLeaves_ x = mapLeaves x f
+            conjuncts_ = map mapLeaves_ conjuncts
+
     replace (Assertion conjuncts) binding = Assertion conjuncts_
         where
             replace_ x = replace x binding
@@ -340,8 +390,9 @@ data Declaration = Constant [Term] Term        -- const a, b, c : A
 instance TShow Declaration where
     tshow d = ""
 
-
 instance Expression Declaration where
+
+    mapLeaves d f = d
 
     replace (Constant ts t) binding = (Constant ts_ t_)
         where
@@ -539,6 +590,14 @@ asSize _ state = error "In order to be converted to a size, a term must be eithe
 -- Encodings and Formulas -------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
+-- Evaluate all dot terms using the values in State
+evaluate :: Expression a -> State -> Expression a
+evaluate expression state = mapLeaves evalTerms state
+    where
+        evalTerms :: Term -> Term
+        evalTerms (Attribute t s) = Dict.findWithDefault (Leaf "error") (t, s) (values state)
+        evalTerms t = t
+
 -- Encode the unique name assumption for a list of terms as a list of formulas
 
 uniqueNameAssumption :: [Term] -> [Formula]
@@ -557,7 +616,7 @@ uniqueNameAssumption terms = concat |> map unaFormula |> sequence [terms, terms]
 encodeFunction :: Term -> [[Term]] -> [Term] -> [Formula]
 encodeFunction functionName domain image = encodeValues ++ encodeBounds 
     where
-        encodeValues = concat |> (map (\args -> encodeDomainElement functionName args image) domain `using` parListChunk 1000 rdeepseq)
+        encodeValues = concat |> (map (\args -> encodeDomainElement functionName args image) domain `using` parListChunk 10000 rdeepseq)
         encodeBounds = forbidOffBounds functionName firstOffBounds lastOffBounds domain imageSize -- TODO: los nombres están swappeados
         imageSize = length image
         firstOffBounds = imageSize                    -- TODO: Oboe
@@ -645,8 +704,12 @@ eitherFrom phi psi = [Disjunction both, Contradiction both]
 -- a) check if `check` works with the variables in Poly expressions
 -- b) make test cases for isGround (Poly head body) stateVariables
 
+------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------------
+
 grounding :: (Expression a, NFData a) => a -> State -> [a]
-grounding expression state | check expression = [expression]
+grounding expression state | check expression = [expression] -- [evaluate expression state], to evaluate dot terms
     where
         check expression_ = isGround expression_ stateVariables
         stateVariables = Set.fromList |> variables state      
@@ -673,11 +736,6 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 
 --------------------------------------------------------------------------------------------------------------
 
--- TODO: Try to group all rules with the same variable signature to make all assignments for that signature just once
-
--- TODO: 
--- a) make sure the way local variables vs global variables are treated is the intended one
-
 bindPoly :: Conjunction -> Dict.Map Term [Term] -> Dict.Map T.Text Term -> Conjunction
 bindPoly (Poly head body) members globalAssignment = Poly [] |> (concat |> map makeMono localAssignments)
     where
@@ -702,6 +760,8 @@ assignments expression ranges variables = map makeAssignment product
         product = sequence |> map (\var -> retrieve_ var) |> variables
         makeAssignment xs = Dict.fromList |> zip variables xs
         retrieve_ var = Dict.findWithDefault [] var ranges
+
+---------------------------------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------------------------------
 --- Map Lists of Declarations to States, Map States and Rules to Ground Formulae ------------------------------
@@ -757,10 +817,10 @@ getRules [] = []
 getRules ((For f):statements) = f:(getRules statements)
 getRules (_:statements) = getRules statements
 
+--------------------------------------------------------------------------------------
+
 programState :: [Statement] -> State
 programState program = getState |> getDeclarations |> program
-
---------------------------------------------------------------------------------------
 
 getGamma :: [Statement] -> [Formula]
 getGamma program = unfoldInstance state rules
