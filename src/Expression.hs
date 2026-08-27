@@ -286,9 +286,9 @@ instance Expression Literal where
 
 instance Expression Conjunction where
     mapLeaves (Mono literal) f = Mono (mapLeaves literal f)
-    mapLeaves (Poly head body) = Poly head_ body_
+    mapLeaves (Poly head body) f = Poly head_ body_
         where
-            head_ = map (\x, y -> (mapLeaves x f, mapLeaves y f)) body
+            head_ = map (\(x, y) -> (mapLeaves x f, mapLeaves y f)) head
             body_ = map (\x -> mapLeaves x f) body
     replace (Mono literal) binding = Mono (replace literal binding)
     replace (Poly head body) binding = Poly (map (\(x, y) -> (replace x binding, replace y binding)) head) (map (\x -> replace x binding) body)
@@ -591,8 +591,8 @@ asSize _ state = error "In order to be converted to a size, a term must be eithe
 ---------------------------------------------------------------------------------------
 
 -- Evaluate all dot terms using the values in State
-evaluate :: Expression a -> State -> Expression a
-evaluate expression state = mapLeaves evalTerms state
+evaluate :: Expression a => a -> State -> a
+evaluate expression state = mapLeaves expression evalTerms
     where
         evalTerms :: Term -> Term
         evalTerms (Attribute t s) = Dict.findWithDefault (Leaf "error") (t, s) (values state)
