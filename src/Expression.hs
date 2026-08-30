@@ -582,6 +582,18 @@ addFunction f domain image state = state { images = newImages, domains = newDoma
         newDomains = Dict.insert f domain (domains state)
         newFunctions = f:(functions state)
 
+-- TODO: define the grounded versions of all other declarations
+
+massUpdate :: State -> [Declaration] -> State
+massUpdate state [] = state
+massUpdate state (d:ds) = massUpdate (stateUpdate d state) ds 
+
+addAttributes :: Term -> Term -> State -> State
+addAttributes term value state = massUpdate state |> map addAssignment attributeAssignments
+    where
+        addAssignment (x, y) = (Assignment x y)
+        attributeAssignments = []
+
 -- If a term has an interpretation as an integer (it is either a sequence of digits or a parameter),
 -- return that integer. Otherwise, raise an exception.
 asSize :: Term -> State -> Int
@@ -612,7 +624,6 @@ uniqueNameAssumption terms = concat |> map unaFormula |> sequence [terms, terms]
         negationConstraints x y = eitherFrom (Positive |> equalityAtom x y) (Negative |> equalityAtom x y)
         areEqual x y = Assertion [Mono |> Positive |> equalityAtom x y]
         areNotEqual x y = Assertion [Mono |> Negative |> equalityAtom x y]
-
 
 -- Encode a function (a relation that's injective and surjective)
 
