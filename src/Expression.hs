@@ -5,6 +5,9 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- TODO: compute 'grounding depth' of expressions to just do
+-- groundN expr depth instead of ground expr | isGround expr = expr, otherwise ground expr
+
 module Expression where
 
 import Prelude
@@ -828,8 +831,8 @@ getState :: [Declaration] -> State
 getState [] = emptyState
 getState (d:declarations) = applyDeclaration d (getState declarations)
     where
-        applyDeclaration d_ state | isGround_ d_ state = groundAndUpdate d_ state
-        applyDeclaration d_ state | otherwise = stateUpdate d_ state
+        applyDeclaration d_ state | isGround_ d_ state = stateUpdate d_ state
+        applyDeclaration d_ state | otherwise = groundAndUpdate d_ state
         isGround_ d_ state = isGround d_ (Set.fromList |> variables state)
 
 unfoldInstance :: State -> [Formula] -> [Formula]
