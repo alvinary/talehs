@@ -566,6 +566,8 @@ collectDependencies declarations = Dict.fromList []
 
 ------------------------------------------------------------------------------------------
 
+
+
 stateUpdate :: Declaration -> State -> State
 stateUpdate (Constant ts t) state = state { members = fuse t ts (members state) }
 stateUpdate (Variable ts t) state = state { ranges = split (massFlatten ts) t (ranges state), variables = (variables state) ++ newVariables }
@@ -821,9 +823,14 @@ getAssignments expression state = assignments expression variableRanges expressi
 --- Map Lists of Declarations to States, Map States and Rules to Ground Formulae ------------------------------
 ---------------------------------------------------------------------------------------------------------------
 
+-- TODO: ordenar las declaraciones por el orden correcto de evaluación antes de llamar esto
 getState :: [Declaration] -> State
 getState [] = emptyState
-getState (d:declarations) = stateUpdate d (getState declarations)
+getState (d:declarations) = applyDeclaration d (getState declarations)
+    where
+        applyDeclaration d_ state | isGround_ d_ state = groundAndUpdate d_ state
+        applyDeclaration d_ state | otherwise = stateUpdate d_ state
+        isGround_ d_ state = isGround d_ (Set.fromList |> variables state)
 
 unfoldInstance :: State -> [Formula] -> [Formula]
 unfoldInstance state rules = allFunctionEncodings ++ ruleGroundings ++ unaEncoding ++ negationEncoding
