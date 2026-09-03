@@ -108,26 +108,26 @@ data Term = Leaf T.Text
           | Attribute Term Term
           | Index Term [Term]
           | Operation Term Term Term
-    deriving (Eq, Ord, Generic, NFData)
+    deriving (Eq, Ord, Generic, NFData, Show)
 
 data Atom = Relation Term [Term]
           | Comparison Term Term Term
-    deriving (Eq, Ord, Generic, NFData)
+    deriving (Eq, Ord, Generic, NFData, Show)
 
 data Literal = Positive Atom
              | Negative Atom
-    deriving (Eq, Ord, Generic, NFData)
+    deriving (Eq, Ord, Generic, NFData, Show)
 
 data Conjunction = Mono Literal
                  | Poly [(Term, Term)] [Literal]
-    deriving (Eq, Ord, Generic, NFData)
+    deriving (Eq, Ord, Generic, NFData, Show)
 
 data Formula = Assertion [Conjunction]
              | Implication [Conjunction] [Conjunction]
              | Equivalence [Conjunction] [Conjunction]
              | Contradiction [Conjunction]
              | Disjunction [Conjunction]
-    deriving (Eq, Ord, Generic, NFData)
+    deriving (Eq, Ord, Generic, NFData, Show)
 
 instance TShow a => TShow [a] where
     tshow xs = T.intercalate ", " (map tshow xs) 
@@ -388,7 +388,7 @@ data Declaration = Constant [Term] Term        -- const a, b, c : A
                  | Assignment Term Term        -- let a.f = b
                  | Module Term [(Term, Term)]  -- bind Module with { Module.A = Here.A }
                  | Parameters [Term]           -- params
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 instance TShow Declaration where
     tshow d = ""
@@ -774,6 +774,17 @@ assignments expression ranges variables = map makeAssignment product
         product = sequence |> map (\var -> retrieve_ var) |> variables
         makeAssignment xs = Dict.fromList |> zip variables xs
         retrieve_ var = Dict.findWithDefault [] var ranges
+
+---------------------------------------------------------------------------------------------------------------
+
+getAssignments :: (Expression a, NFData a) => a -> State -> [Dict.Map T.Text Term]
+getAssignments expression state = assignments expression variableRanges expressionVariables
+    where
+        expressionVariables = Set.toList |> collect expression |> Set.fromList stateVariables
+        variableRanges = Dict.fromList |> map getRange stateVariables
+        stateVariables = variables state
+        getRange variable = (variable, retrieve (ranges state) (members state) |> variable)
+        
 
 ---------------------------------------------------------------------------------------------------------------
 
