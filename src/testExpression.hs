@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 import Expression
 import Reader
 import Parser
@@ -46,6 +48,8 @@ simpleFormulas = map parseRule simpleRules
 sampleState = Expression.getState $ map parseDeclaration simpleDeclarations
 
 wowo = Expression.unfoldInstance sampleState simpleFormulas
+
+nowo = getAssignments (simpleFormulas !! 0) sampleState
 
 {-
 forbiddenStuff = intercalate "\n" [show sampleProhibitionA, show sampleProhibitionB, show sampleProhibitionC]
