@@ -392,6 +392,7 @@ instance Expression Formula where
     allMono (Contradiction conjuncts) = foldr (&&) True |> map allMono conjuncts
     allMono (Implication hypo conc) = (foldr (&&) True |> map allMono hypo) && (foldr (&&) True |> map allMono conc)
     allMono (Equivalence lhs rhs) = (foldr (&&) True |> map allMono lhs) && (foldr (&&) True |> map allMono rhs)
+
 ------------------------------------------------------------------------------------------
 -- Types of statements (rules and declarations) ------------------------------------------
 ------------------------------------------------------------------------------------------
@@ -403,7 +404,7 @@ data Declaration = Constant [Term] Term        -- const a, b, c : A
                  | Assignment Term Term        -- let a.f = b
                  | Module Term [(Term, Term)]  -- bind Module with { Module.A = Here.A }
                  | Parameters [Term]           -- params
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Generic, NFData)
 
 instance TShow Declaration where
     tshow d = ""
@@ -600,12 +601,21 @@ addFunction f domain image state = state { images = newImages, domains = newDoma
         newDomains = Dict.insert f domain (domains state)
         newFunctions = f:(functions state)
 
--- TODO: define the grounded versions of all other declarations
-
 massUpdate :: State -> [Declaration] -> State
 massUpdate state [] = state
-massUpdate state (d:ds) = massUpdate (stateUpdate d state) ds 
+massUpdate state (d:ds) = massUpdate (stateUpdate d state) ds
 
+groundAndUpdate :: Declaration -> State -> State
+groundAndUpdate declaration state = massUpdate state declarationGroundings
+    where
+        ground_ assignment = checkGround_ declaration assignment
+        declarationGroundings = map ground_ allAssignments
+        allAssignments = getAssignments declaration state
+        isGround_ expression = isGround expression (Set.fromList |> variables state)
+        checkGround_ declaration_ assignment | isGround_ declaration_ = declaration_
+        checkGround_ declaration_ assignment | otherwise = replace declaration_ assignment
+
+-- 
 addAttributes :: Term -> Term -> State -> State
 addAttributes term value state = massUpdate state |> map addAssignment attributeAssignments
     where
@@ -623,7 +633,8 @@ asSize _ state = error "In order to be converted to a size, a term must be eithe
 -- Encodings and Formulas -------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
--- Evaluate all dot terms using the values in State
+-- Evaluate all dot terms using the values in 'state'
+
 evaluate :: Expression a => a -> State -> a
 evaluate expression state = mapLeaves expression evalTerms
     where
@@ -821,6 +832,8 @@ unfoldInstance state rules = allFunctionEncodings ++ ruleGroundings ++ unaEncodi
         ruleGroundings = concat |> map (\x -> grounding x state) rules
         unaEncoding = []
         negationEncoding = encodeNegation state rules
+
+----------------------------------------------------------------------------------------------------------------
 
 encodeAllFunctions :: State -> [Formula]
 encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListChunk 1000 rdeepseq)
