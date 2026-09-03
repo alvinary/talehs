@@ -108,26 +108,26 @@ data Term = Leaf T.Text
           | Attribute Term Term
           | Index Term [Term]
           | Operation Term Term Term
-    deriving (Eq, Ord, Generic, NFData, Show)
+    deriving (Eq, Ord, Generic, NFData)
 
 data Atom = Relation Term [Term]
           | Comparison Term Term Term
-    deriving (Eq, Ord, Generic, NFData, Show)
+    deriving (Eq, Ord, Generic, NFData)
 
 data Literal = Positive Atom
              | Negative Atom
-    deriving (Eq, Ord, Generic, NFData, Show)
+    deriving (Eq, Ord, Generic, NFData)
 
 data Conjunction = Mono Literal
                  | Poly [(Term, Term)] [Literal]
-    deriving (Eq, Ord, Generic, NFData, Show)
+    deriving (Eq, Ord, Generic, NFData)
 
 data Formula = Assertion [Conjunction]
              | Implication [Conjunction] [Conjunction]
              | Equivalence [Conjunction] [Conjunction]
              | Contradiction [Conjunction]
              | Disjunction [Conjunction]
-    deriving (Eq, Ord, Generic, NFData, Show)
+    deriving (Eq, Ord, Generic, NFData)
 
 instance TShow a => TShow [a] where
     tshow xs = T.intercalate ", " (map tshow xs) 
@@ -138,17 +138,29 @@ instance TShow Term where
     tshow (Index t ts) = (tshow t) <> "[" <> (intercalate ", " (map tshow ts)) <> "]"
     tshow (Operation t1 op t2) = tshow t1 <> " " <> tshow op <> " " <> tshow t2
 
+instance Show Term where
+    show term = show |> tshow term
+
 instance TShow Atom where
     tshow (Relation t ts) = tshow t <> " (" <> (intercalate ", " (map tshow ts)) <> ")"
     tshow (Comparison t1 comp t2) = tshow t1 <> " " <> tshow comp <> " " <> tshow t2
+
+instance Show Atom where
+    show expr = show |> tshow expr
  
 instance TShow Literal where
     tshow (Positive atom) = tshow atom
     tshow (Negative atom) = "¬" <> tshow atom
+
+instance Show Literal where
+    show expr = show |> tshow expr
  
 instance TShow Conjunction where
     tshow (Mono literal) = tshow literal
     tshow (Poly ts ls) = (intercalate ", " (map (\(x, y) -> tshow x <> ":" <> tshow y) ts)) <> " | { " <> (intercalate ", " (map tshow ls)) <> " }"
+
+instance Show Conjunction where
+    show expr = show |> tshow expr
 
 instance TShow Formula where
     tshow (Assertion conjuncts) = intercalate ", " (map tshow conjuncts)
@@ -156,6 +168,9 @@ instance TShow Formula where
     tshow (Disjunction conjuncts) = intercalate " v " (map tshow conjuncts)
     tshow (Implication hypo conc) = intercalate ", " (map tshow hypo) <> " => " <> intercalate ", " (map tshow conc)
     tshow (Equivalence lhs rhs) = intercalate ", " (map tshow lhs) <> " <=> " <> intercalate ", " (map tshow rhs)
+
+instance Show Formula where
+    show expr = show |> tshow expr
 
 class TShow a where
     tshow :: a -> T.Text
@@ -388,10 +403,13 @@ data Declaration = Constant [Term] Term        -- const a, b, c : A
                  | Assignment Term Term        -- let a.f = b
                  | Module Term [(Term, Term)]  -- bind Module with { Module.A = Here.A }
                  | Parameters [Term]           -- params
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord)
 
 instance TShow Declaration where
     tshow d = ""
+
+instance Show Declaration where
+    show expr = show |> tshow expr
 
 instance Expression Declaration where
 
