@@ -153,7 +153,7 @@ instance Show Atom where
  
 instance TShow Literal where
     tshow (Positive atom) = tshow atom
-    tshow (Negative atom) = "¬" <> tshow atom
+    tshow (Negative atom) = "¬ " <> tshow atom
 
 instance Show Literal where
     show expr = show |> tshow expr
@@ -316,6 +316,7 @@ instance Expression Conjunction where
     bindAny (Poly head body) members binding = bindPoly globalSubstitution members binding
         where
             globalSubstitution = (replace (Poly head body) binding)
+    bindAny (Mono literal) members binding = (Mono |> bindAny literal members binding)
     leaves (Mono literal) = leaves literal
     leaves (Poly ranges literals) = bigUnion rangeLeaves `union` bigUnion literalLeaves
         where
@@ -331,6 +332,25 @@ instance Expression Conjunction where
     allMono (Poly _ _) = False
 
 instance Expression Formula where
+
+    bindAny (Assertion conjuncts) members binding = (Assertion boundConjuncts)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+    bindAny (Contradiction conjuncts) members binding = (Contradiction boundConjuncts)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+    bindAny (Disjunction conjuncts) members binding = (Disjunction boundConjuncts)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+    bindAny (Implication conjuncts conjuncts_) members binding = (Implication boundConjuncts boundConjuncts_)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+            boundConjuncts_ = map (\x -> bindAny x members binding) conjuncts_
+    bindAny (Equivalence conjuncts conjuncts_) members binding = (Equivalence boundConjuncts boundConjuncts_)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+            boundConjuncts_ = map (\x -> bindAny x members binding) conjuncts_
+    bindAny x m b = error (show x)
 
     mapLeaves (Assertion conjuncts) f = Assertion conjuncts_
         where
@@ -505,19 +525,6 @@ emptyState = State Dict.empty [] Dict.empty [] Dict.empty Dict.empty Dict.empty 
 
 {-
 
-reservedWords = ["->", "let", "const", "var", "(", ")", "[", "]", ":", ",", ".", "False", "order", "=", "<"]
-
-leftSquare = T.pack "["
-rightSquare = T.pack "]"
-dotSymbol = T.pack "."
-colonSymbol = T.pack ":"
-space = T.pack " "
-
-removeReserved :: String -> String
-removeReserved text = T.unpack |>  T.replace colonSymbol space |> T.replace leftSquare space |> T.replace rightSquare space |> T.replace dotSymbol space |> T.pack text
-
--- lala => [(t1, t2)] => deps
-
 sampleDeclarations = [
     words |> removeReserved "A x",  --"var x : A",
     words |> removeReserved "x d ", --"var t[x] : Type[x]",
@@ -567,16 +574,63 @@ collectDependencies declarations = Dict.fromList []
 
 -}
 
+{-
+import Data.Graph (graphFromEdges, topSort)
+
+-- Define your dependencies as a list of (Node, Key, [DependencyKeys])
+-- Example: Task A depends on nothing, Task B depends on A, Task C depends on B and A.
+dependencies :: [(String, String, [String])]
+dependencies = 
+    [ ("Task C", "C", ["B", "A"])
+    , ("Task B", "B", ["A"])
+    , ("Task A", "A", [])
+    ]
+
+main :: IO ()
+main = do
+    -- graphFromEdges returns: (Graph, Vertex -> (node, key, [key]), Key -> Maybe Vertex)
+    let (graph, nodeFromVertex, _) = graphFromEdges dependencies
+    
+    -- topSort returns a list of [Vertex]
+    let sortedVertices = topSort graph
+    
+    -- Map back to our original node names (taking just the first element of the tuple)
+    let sortedTasks = map (\v -> let (node, _, _) = nodeFromVertex v in node) sortedVertices
+    
+    print sortedTasks
+    -- Output: ["Task A","Task B","Task C"]
+-}
+
+-- sort declarations in dependency order
+evaluationOrder :: [Declaration] -> [Declaration]
+evaluationOrder [] = []
+evaluationOrder ds = ds
+    where
+        dependencies = concat |> map declarationDependencies ds
+
+
+-- Map a list of declarations to a list of tuples
+-- (t1, t2) in dependencies(ds) <==> exists d in ds ::  
+
+
+declarationDependencies :: Declaration -> [(Term, Term)]
+declarationDependencies (Constant constants sort) = map (\c -> (sort, c)) constants
+declarationDependencies (Order prefix size sort) = [(sort, size), (sort, prefix)]
+declarationDependencies (Function function domain image) = [(function, image)] ++ map (\d -> (function, d)) domain
+declarationDependencies (Variable vars sort) = map (\v -> (v, sort)) vars
+declarationDependencies (Assignment t1 t2) = [(t1, t2)]
+declarationDependencies _ = []
+
+
 ------------------------------------------------------------------------------------------
 
 
-
+-- Intended for use with ground declarations
 stateUpdate :: Declaration -> State -> State
 stateUpdate (Constant ts t) state = state { members = fuse t ts (members state) }
 stateUpdate (Variable ts t) state = state { ranges = split (massFlatten ts) t (ranges state), variables = (variables state) ++ newVariables }
     where
         newVariables = massFlatten ts -- en realidad, es cada nueva variable que creaste, con las sustituciones pertinentes
-        allAssignments = []
 stateUpdate (Order prefix size sort) state = addTotalOrder prefix size sort state
 stateUpdate (Function f domain image) state = addFunction f domain image state
 stateUpdate (Assignment (Attribute t f) s) state = state { values = Dict.insert (t, f) s (values state) }
@@ -610,6 +664,7 @@ massUpdate :: State -> [Declaration] -> State
 massUpdate state [] = state
 massUpdate state (d:ds) = massUpdate (stateUpdate d state) ds
 
+-- No duplica funcionalidad de grounding esto?
 groundAndUpdate :: Declaration -> State -> State
 groundAndUpdate declaration state = massUpdate state declarationGroundings
     where
@@ -723,7 +778,6 @@ bitConstraints f args m = concat |> map bitFormulas bitIndices
 -- `from` is the first forbidden value, `to` is the last
 forbidOffBounds :: Term -> Int -> Int -> [[Term]] -> Int -> [Formula]
 forbidOffBounds f from to domain imageSize = [forbidIndexBits f elem index imageSize | elem <- domain, index <- [from..to]]
-        
 
 ------------------------------------------------------------------------------------------
 
