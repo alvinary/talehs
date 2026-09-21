@@ -5,8 +5,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- TODO: compute 'grounding depth' of expressions to just do
--- groundN expr depth instead of ground expr | isGround expr = expr, otherwise ground expr
 -- TODO: separate rules with / without attributes and do not apply evaluate on the ones without
 -- TODO: add xor as a built-in connective
 
@@ -32,8 +30,6 @@ import GHC.Generics (Generic)
 infixr 0 |>
 (|>) :: (a -> b) -> a -> b
 (|>) f a = f a
-
-
 
 -------------------------------------------------------------------------------------------
 -- Definitions of distinguished terms that work as special constants and names of ---------
@@ -528,84 +524,6 @@ emptyState = State Dict.empty [] Dict.empty [] Dict.empty Dict.empty Dict.empty 
 
 -- Functions used to ensure evaluation terminates / there are no cyclic declarations -----
 
-{-
-
-sampleDeclarations = [
-    words |> removeReserved "A x",  --"var x : A",
-    words |> removeReserved "x d ", --"var t[x] : Type[x]",
-    words |> removeReserved "a d",  --"order vertex n : A",
-    words |> removeReserved "d e",  --"order vertex[x] m : Type[x]",
-    words |> removeReserved "f e",  --"let x.type = Type[x].first",
-    words |> removeReserved "a g"   -- "params m n"
-    ]
-
-termDependencies :: T.Text -> [[T.Text]] -> Set T.Text
-termDependencies x xss = allDependencies x xss `difference` Set.fromList reservedWords
- 
-directDependencies :: (Eq a, Ord a) => a -> [[a]] -> Set a
-directDependencies e deps = Set.delete e $ Set.fromList $ map head $ filter (\xs -> e `elem` xs) deps
-
-allDependencies :: (Eq a, Ord a) => a -> [[a]] -> Set a
-allDependencies x xss = accumulate (Set.singleton x) (Set.empty) xss Set.empty
-
-accumulate :: (Eq a, Ord a) => Set a -> Set a -> [[a]] -> Set a -> Set a
-accumulate queue visited sources accumulator | Set.null queue = accumulator
-accumulate queue visited sources accumulator | otherwise =
-    accumulate newQueue newVisited sources (accumulator `union` firstDeps)
-        where
-            first = Set.findMin queue
-            firstDeps = directDependencies first sources
-            newVisited = visited `union` (Set.singleton first)
-            newQueue = (queue `union` firstDeps) `difference` newVisited
-
-
-sourceCandidates :: Declaration -> [(Term, Term)]
-sourceCandidates (Constant consts sort) = map (\const -> (sort, const)) consts
-sourceCandidates (Order prefix n sort) = [(sort, prefix), (sort, n)]
-sourceCandidates (Function t ds im) = [(t, im)] ++ map (\d -> (t, d)) ds
-sourceCandidates (Variable vars sort) = map (\v -> (v, sort)) vars
-sourceCandidates (Assignment t1 t2) = [(t1, t2)]
-sourceCandidates (Module moduleName bindings) = []
-
-collectAllVariables :: [Declaration] -> Set T.Text
-collectAllVariables declarations = bigUnion |> map leaves |> filter isVariableDeclaration declarations
-
-isVariableDeclaration :: Declaration -> Bool
-isVariableDeclaration (Variable _ _) = True
-isVariableDeclaration _ = False
-
-collectDependencies :: [Declaration] -> Dict.Map T.Text [Text]
-collectDependencies declarations = Dict.fromList []
-
--}
-
-{-
-import Data.Graph (graphFromEdges, topSort)
-
--- Define your dependencies as a list of (Node, Key, [DependencyKeys])
--- Example: Task A depends on nothing, Task B depends on A, Task C depends on B and A.
-dependencies :: [(String, String, [String])]
-dependencies = 
-    [ ("Task C", "C", ["B", "A"])
-    , ("Task B", "B", ["A"])
-    , ("Task A", "A", [])
-    ]
-
-main :: IO ()
-main = do
-    -- graphFromEdges returns: (Graph, Vertex -> (node, key, [key]), Key -> Maybe Vertex)
-    let (graph, nodeFromVertex, _) = graphFromEdges dependencies
-    
-    -- topSort returns a list of [Vertex]
-    let sortedVertices = topSort graph
-    
-    -- Map back to our original node names (taking just the first element of the tuple)
-    let sortedTasks = map (\v -> let (node, _, _) = nodeFromVertex v in node) sortedVertices
-    
-    print sortedTasks
-    -- Output: ["Task A","Task B","Task C"]
--}
-
 -- sort declarations in dependency order
 evaluationOrder :: [Declaration] -> [Declaration]
 evaluationOrder [] = []
@@ -613,11 +531,8 @@ evaluationOrder ds = ds
     where
         dependencies = concat |> map declarationDependencies ds
 
-
 -- Map a list of declarations to a list of tuples
 -- (t1, t2) in dependencies(ds) <==> exists d in ds ::  
-
-
 declarationDependencies :: Declaration -> [(Term, Term)]
 declarationDependencies (Constant constants sort) = map (\c -> (sort, c)) constants
 declarationDependencies (Order prefix size sort) = [(sort, size), (sort, prefix)]
@@ -625,7 +540,6 @@ declarationDependencies (Function function domain image) = [(function, image)] +
 declarationDependencies (Variable vars sort) = map (\v -> (v, sort)) vars
 declarationDependencies (Assignment t1 t2) = [(t1, t2)]
 declarationDependencies _ = []
-
 
 ------------------------------------------------------------------------------------------
 
@@ -690,7 +604,7 @@ groundAndUpdate declaration state = massUpdate state declarationGroundings
         checkGround_ declaration_ assignment | isGround_ declaration_ = declaration_
         checkGround_ declaration_ assignment | otherwise = replace declaration_ assignment
 
---
+-------------------------------------------------------------------------------------------------------------------------
 
 dependencies :: Declaration -> [Declaration] -> Set Declaration
 dependencies d ds = Set.empty
@@ -795,8 +709,6 @@ bitConstraints f args m = concat |> map bitFormulas bitIndices
 forbidOffBounds :: Term -> Int -> Int -> [[Term]] -> Int -> [Formula]
 forbidOffBounds f from to domain imageSize = [forbidIndexBits f elem index imageSize | elem <- domain, index <- [from..to]]
 
-------------------------------------------------------------------------------------------
-
 -- Auxiliary functions for indexing 'value bits'
 enumerate :: [a] -> [(Int, a)]
 enumerate [] = []
@@ -806,8 +718,6 @@ enn :: Int -> [a] -> [(Int, a)]
 enn _ [] = []
 enn n (x:xs) = (n, x):(enn (n + 1) xs)
 
-------------------------------------------------------------------------------------------
-
 -- Encode the xor of two literals as a list of formulas
 eitherFrom :: Literal -> Literal -> [Formula]
 eitherFrom phi psi = [Disjunction both, Contradiction both]
@@ -815,15 +725,6 @@ eitherFrom phi psi = [Disjunction both, Contradiction both]
         phi_ = Mono |> phi
         psi_ = Mono |> psi
         both = [phi_, psi_]
-
-------------------------------------------------------------------------------------------
--- Variables, ground vs non-ground formulas, and assignments -----------------------------
-------------------------------------------------------------------------------------------
-
--- a) check if `check` works with the variables in Poly expressions
--- b) make test cases for isGround (Poly head body) stateVariables
-
-------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------
 -- Functions used for grounding formulas -------------------------------------------------
@@ -890,9 +791,6 @@ getAssignments expression state = assignments expression variableRanges expressi
         stateVariables = variables state
         getRange variable = (variable, retrieve (ranges state) (members state) |> variable)
         
-
----------------------------------------------------------------------------------------------------------------
-
 ---------------------------------------------------------------------------------------------------------------
 --- Map Lists of Declarations to States, and Map States and Rules to Ground Formulae --------------------------
 ---------------------------------------------------------------------------------------------------------------
@@ -972,64 +870,3 @@ getGamma program = unfoldInstance state rules
     where
         state = programState program
         rules = getRules program
-
----------------------------------------------------------------------------------------------------------------
--- Errors and Warnings ----------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------------
-
-------------------------------------------------------------------------------------------
--- Tests ---------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------
-
----------------------------------------------------------------------------------------------------------
---- TODOS y preguntas -----------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------
-
------------------------------------------------------------------------
--- CASOS DE ERROR -----------------------------------------------------
------------------------------------------------------------------------
-
--- ERROR DE SINTAXIS
-
--- DECLARACIONES CÍCLICAS
--- El grafo de depenendencias de las declaraciones no es acíclico
-
--- DECLARACIÓN DE VARIABLE INCONSISTENTE
--- Se declara dos veces una misma variables con distinto rango
-
--- DECLARACIÓN DE FUNCIÓN INCONSISTENTE (mismo dominio, distinta imagen)
-
--- MÓDULO NO ENCONTRADO
-
--- ATRIBUTO SIN DEFINICIÓN
--- Al intentar evaluar a.f, se encuentra que el mapa de valores no tiene un atributo f definido para el término a
-
--- TÉRMINO EN DECLARACIÓN DE ORDEN TOTAL NO ES UN NÚMERO
--- El término que usaste para definir un orden total no se puede interpretar como un cardinal
-
--- LHS DE DECLARACIÓN DE ASIGNACIÓN NO ES UN ATRIBUTO
--- tenés a = b, pero a no es de la forma c.f
-
--- LAS VARIABLES LOCALES NO DEBEN SER VARIABLES REGISTRADAS COMO VARIABLES GLOBALES DE LA ESPECIFICACIÓN
-
------------------------------------------------------------------------
--- ADVERTENCIAS -------------------------------------------------------
------------------------------------------------------------------------
-
--- EQUIVALENCIA IMPAR
-
--- SORT VACÍO
-
--- GROUNDING VACÍO
-
--- ATRIBUTO SOBREESCRITO
-
--- RANGO DE VARIABLE ESTÁ VACÍO
-
------------------------------------------------------------------------
--- REQUISITOS DE PREPROCESAMIENTO -------------------------------------
------------------------------------------------------------------------
-
--- Sustitución de operaciones -----------------------------------------
-
--- Sustitución de símbolos especiales de comparaciones ----------------
