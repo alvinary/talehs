@@ -154,7 +154,7 @@ instance Show Atom where
  
 instance TShow Literal where
     tshow (Positive atom) = tshow atom
-    tshow (Negative atom) = "¬ " <> tshow atom
+    tshow (Negative atom) = "-" <> tshow atom
 
 instance Show Literal where
     show expr = show |> tshow expr
@@ -566,7 +566,7 @@ addTotalOrder prefix size sort state = state { members = newMembers, values = ne
         totalOrder = map (\t -> Index prefix [t]) rangeTerms
         rangeTerms = map (\i -> Leaf |> T.pack |> show i) [1..sizeValue]
         sizeValue = asSize size state
-        valuesMap = Dict.fromList |> map makeValue [1..(sizeValue - 1)]  -- 
+        valuesMap = Dict.fromList |> map makeValue [1..sizeValue]  -- 
         makeValue i = ((Index prefix [Leaf |> T.pack |> show i], next), Index prefix [Leaf |> T.pack |> show |> i + 1])    -- (i, next) = i + 1
         next = Leaf "next"
 
@@ -627,11 +627,15 @@ asSize _ state = error "In order to be converted to a size, a term must be eithe
 -- Evaluate all dot terms using the values in 'state'
 
 evaluate :: Expression a => a -> State -> a
-evaluate expression state = mapLeaves expression evalTerms
+evaluate expression state = fixpoint_
     where
+        expression_ = mapLeaves expression evalTerms
         evalTerms :: Term -> Term
-        evalTerms (Attribute t s) = Dict.findWithDefault (Leaf "error") (t, s) (values state)
+        evalTerms (Attribute t s) = Dict.findWithDefault (error |> show t ++ " " ++ show s) (evaluate t state, s) (values state)
         evalTerms t = t
+        fixpoint_
+            | (expression == expression_) = expression
+            | (expression /= expression_) = evaluate expression_ state
 
 -- Encode the unique name assumption for a list of terms as a list of formulas
 
