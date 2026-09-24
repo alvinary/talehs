@@ -194,7 +194,14 @@ class Ord a => Expression a where
 
 instance Expression Term where
 
+    mapLeaves (Index t ts) f = (Index t_ ts_)
+        where
+            t_ = f t
+            ts_ = map (\x -> mapLeaves x f) ts
+
     mapLeaves term f = f term
+
+    -- mapLeaves should be the general case of replace, where f is replacing with bindings
 
     replace term binding | Dict.member (tshow term) binding = Dict.findWithDefault (Leaf "error") (tshow term) binding
 
@@ -645,7 +652,7 @@ evaluate expression state = fixpoint_
     where
         expression_ = mapLeaves expression evalTerms
         evalTerms :: Term -> Term
-        evalTerms (Attribute t s) = Dict.findWithDefault (error |> show t ++ " " ++ show s) (evaluate t state, s) (values state)
+        evalTerms (Attribute t s) = Dict.findWithDefault (error |> show t ++ " " ++ show s) (evaluate t state, s) (values state) -- TODO: evaluate s?
         evalTerms t = t
         fixpoint_
             | (expression == expression_) = expression
