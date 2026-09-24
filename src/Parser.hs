@@ -33,6 +33,7 @@ tokenShapes = [("<=>", TokenIff),
                ("[", TokenOpenBrackets),
                ("]", TokenCloseBrackets),
                (",", TokenComma),
+               ("=", TokenEquals),
                (".", TokenDot)]
 
 infixr 0 |>
