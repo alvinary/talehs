@@ -5,6 +5,9 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- TODO: separate rules with / without attributes and do not apply evaluate on the ones without
+-- TODO: add xor as a built-in connective
+
 module Expression where
 
 import Prelude
@@ -90,6 +93,10 @@ flatten t = tshow t
 massFlatten :: [Term] -> [T.Text]
 massFlatten ts = map flatten ts
 
+-- TODO: parser must reject empty terms. Ensure it does, ensure that's known.
+emptyTerm :: Term 
+emptyTerm = (Leaf "")
+
 -------------------------------------------------------------------------------------------
 -- Type aliases ---------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------
@@ -135,17 +142,29 @@ instance TShow Term where
     tshow (Index t ts) = (tshow t) <> "[" <> (intercalate ", " (map tshow ts)) <> "]"
     tshow (Operation t1 op t2) = tshow t1 <> " " <> tshow op <> " " <> tshow t2
 
+instance Show Term where
+    show term = show |> tshow term
+
 instance TShow Atom where
     tshow (Relation t ts) = tshow t <> " (" <> (intercalate ", " (map tshow ts)) <> ")"
     tshow (Comparison t1 comp t2) = tshow t1 <> " " <> tshow comp <> " " <> tshow t2
+
+instance Show Atom where
+    show expr = show |> tshow expr
  
 instance TShow Literal where
     tshow (Positive atom) = tshow atom
-    tshow (Negative atom) = "¬" <> tshow atom
+    tshow (Negative atom) = "-" <> tshow atom
+
+instance Show Literal where
+    show expr = show |> tshow expr
  
 instance TShow Conjunction where
     tshow (Mono literal) = tshow literal
     tshow (Poly ts ls) = (intercalate ", " (map (\(x, y) -> tshow x <> ":" <> tshow y) ts)) <> " | { " <> (intercalate ", " (map tshow ls)) <> " }"
+
+instance Show Conjunction where
+    show expr = show |> tshow expr
 
 instance TShow Formula where
     tshow (Assertion conjuncts) = intercalate ", " (map tshow conjuncts)
@@ -153,6 +172,9 @@ instance TShow Formula where
     tshow (Disjunction conjuncts) = intercalate " v " (map tshow conjuncts)
     tshow (Implication hypo conc) = intercalate ", " (map tshow hypo) <> " => " <> intercalate ", " (map tshow conc)
     tshow (Equivalence lhs rhs) = intercalate ", " (map tshow lhs) <> " <=> " <> intercalate ", " (map tshow rhs)
+
+instance Show Formula where
+    show expr = show |> tshow expr
 
 class TShow a where
     tshow :: a -> T.Text
@@ -295,6 +317,7 @@ instance Expression Conjunction where
     bindAny (Poly head body) members binding = bindPoly globalSubstitution members binding
         where
             globalSubstitution = (replace (Poly head body) binding)
+    bindAny (Mono literal) members binding = (Mono |> bindAny literal members binding)
     leaves (Mono literal) = leaves literal
     leaves (Poly ranges literals) = bigUnion rangeLeaves `union` bigUnion literalLeaves
         where
@@ -310,6 +333,25 @@ instance Expression Conjunction where
     allMono (Poly _ _) = False
 
 instance Expression Formula where
+
+    bindAny (Assertion conjuncts) members binding = (Assertion boundConjuncts)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+    bindAny (Contradiction conjuncts) members binding = (Contradiction boundConjuncts)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+    bindAny (Disjunction conjuncts) members binding = (Disjunction boundConjuncts)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+    bindAny (Implication conjuncts conjuncts_) members binding = (Implication boundConjuncts boundConjuncts_)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+            boundConjuncts_ = map (\x -> bindAny x members binding) conjuncts_
+    bindAny (Equivalence conjuncts conjuncts_) members binding = (Equivalence boundConjuncts boundConjuncts_)
+        where
+            boundConjuncts = map (\x -> bindAny x members binding) conjuncts
+            boundConjuncts_ = map (\x -> bindAny x members binding) conjuncts_
+    bindAny x m b = error (show x)
 
     mapLeaves (Assertion conjuncts) f = Assertion conjuncts_
         where
@@ -374,6 +416,7 @@ instance Expression Formula where
     allMono (Contradiction conjuncts) = foldr (&&) True |> map allMono conjuncts
     allMono (Implication hypo conc) = (foldr (&&) True |> map allMono hypo) && (foldr (&&) True |> map allMono conc)
     allMono (Equivalence lhs rhs) = (foldr (&&) True |> map allMono lhs) && (foldr (&&) True |> map allMono rhs)
+
 ------------------------------------------------------------------------------------------
 -- Types of statements (rules and declarations) ------------------------------------------
 ------------------------------------------------------------------------------------------
@@ -385,10 +428,13 @@ data Declaration = Constant [Term] Term        -- const a, b, c : A
                  | Assignment Term Term        -- let a.f = b
                  | Module Term [(Term, Term)]  -- bind Module with { Module.A = Here.A }
                  | Parameters [Term]           -- params
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Generic, NFData)
 
 instance TShow Declaration where
     tshow d = ""
+
+instance Show Declaration where
+    show expr = show |> tshow expr
 
 instance Expression Declaration where
 
@@ -473,93 +519,49 @@ data State = State {
 	indices    :: Dict.Map Term [Term],      -- Map the head of an indexed term to the signature of its indices
     values     :: Dict.Map (Term, Term) Term -- Map f t to f(t)
 }
+    deriving Show
 
 emptyState = State Dict.empty [] Dict.empty [] Dict.empty Dict.empty Dict.empty Dict.empty Dict.empty
 
 -- Functions used to ensure evaluation terminates / there are no cyclic declarations -----
 
-{-
+-- sort declarations in dependency order
+evaluationOrder :: [Declaration] -> [Declaration]
+evaluationOrder [] = []
+evaluationOrder ds = ds
+    where
+        dependencies = concat |> map declarationDependencies ds
 
-reservedWords = ["->", "let", "const", "var", "(", ")", "[", "]", ":", ",", ".", "False", "order", "=", "<"]
-
-leftSquare = T.pack "["
-rightSquare = T.pack "]"
-dotSymbol = T.pack "."
-colonSymbol = T.pack ":"
-space = T.pack " "
-
-removeReserved :: String -> String
-removeReserved text = T.unpack |>  T.replace colonSymbol space |> T.replace leftSquare space |> T.replace rightSquare space |> T.replace dotSymbol space |> T.pack text
-
--- lala => [(t1, t2)] => deps
-
-sampleDeclarations = [
-    words |> removeReserved "A x",  --"var x : A",
-    words |> removeReserved "x d ", --"var t[x] : Type[x]",
-    words |> removeReserved "a d",  --"order vertex n : A",
-    words |> removeReserved "d e",  --"order vertex[x] m : Type[x]",
-    words |> removeReserved "f e",  --"let x.type = Type[x].first",
-    words |> removeReserved "a g"   -- "params m n"
-    ]
-
-termDependencies :: T.Text -> [[T.Text]] -> Set T.Text
-termDependencies x xss = allDependencies x xss `difference` Set.fromList reservedWords
- 
-directDependencies :: (Eq a, Ord a) => a -> [[a]] -> Set a
-directDependencies e deps = Set.delete e $ Set.fromList $ map head $ filter (\xs -> e `elem` xs) deps
-
-allDependencies :: (Eq a, Ord a) => a -> [[a]] -> Set a
-allDependencies x xss = accumulate (Set.singleton x) (Set.empty) xss Set.empty
-
-accumulate :: (Eq a, Ord a) => Set a -> Set a -> [[a]] -> Set a -> Set a
-accumulate queue visited sources accumulator | Set.null queue = accumulator
-accumulate queue visited sources accumulator | otherwise =
-    accumulate newQueue newVisited sources (accumulator `union` firstDeps)
-        where
-            first = Set.findMin queue
-            firstDeps = directDependencies first sources
-            newVisited = visited `union` (Set.singleton first)
-            newQueue = (queue `union` firstDeps) `difference` newVisited
-
-
-sourceCandidates :: Declaration -> [(Term, Term)]
-sourceCandidates (Constant consts sort) = map (\const -> (sort, const)) consts
-sourceCandidates (Order prefix n sort) = [(sort, prefix), (sort, n)]
-sourceCandidates (Function t ds im) = [(t, im)] ++ map (\d -> (t, d)) ds
-sourceCandidates (Variable vars sort) = map (\v -> (v, sort)) vars
-sourceCandidates (Assignment t1 t2) = [(t1, t2)]
-sourceCandidates (Module moduleName bindings) = []
-
-collectAllVariables :: [Declaration] -> Set T.Text
-collectAllVariables declarations = bigUnion |> map leaves |> filter isVariableDeclaration declarations
-
-isVariableDeclaration :: Declaration -> Bool
-isVariableDeclaration (Variable _ _) = True
-isVariableDeclaration _ = False
-
-collectDependencies :: [Declaration] -> Dict.Map T.Text [Text]
-collectDependencies declarations = Dict.fromList []
-
--}
+-- Map a list of declarations to a list of tuples
+-- (t1, t2) in dependencies(ds) <==> exists d in ds ::  
+declarationDependencies :: Declaration -> [(Term, Term)]
+declarationDependencies (Constant constants sort) = map (\c -> (sort, c)) constants
+declarationDependencies (Order prefix size sort) = [(sort, size), (sort, prefix)]
+declarationDependencies (Function function domain image) = [(function, image)] ++ map (\d -> (function, d)) domain
+declarationDependencies (Variable vars sort) = map (\v -> (v, sort)) vars
+declarationDependencies (Assignment t1 t2) = [(t1, t2)]
+declarationDependencies _ = []
 
 ------------------------------------------------------------------------------------------
 
+-- Intended for use with ground declarations
 stateUpdate :: Declaration -> State -> State
 stateUpdate (Constant ts t) state = state { members = fuse t ts (members state) }
 stateUpdate (Variable ts t) state = state { ranges = split (massFlatten ts) t (ranges state), variables = (variables state) ++ newVariables }
     where
         newVariables = massFlatten ts -- en realidad, es cada nueva variable que creaste, con las sustituciones pertinentes
-        allAssignments = []
 stateUpdate (Order prefix size sort) state = addTotalOrder prefix size sort state
 stateUpdate (Function f domain image) state = addFunction f domain image state
-stateUpdate (Assignment (Attribute t f) s) state = state { values = Dict.insert (t, f) s (values state) }
+stateUpdate (Assignment (Attribute t f) s) state = state { values = Dict.insert (t_, f) s_ (values state) }
+    where
+        t_ = evaluate t state
+        s_ = evaluate s state
 -- stateUpdate (Parameters ts) state = state { parameters = Dict.fromList |> getParameters ts }
 stateUpdate _ state = error "Undefined state update"
 
--- Parameters with default values
--- Parameters with terminal values
--- Binding parameters to sort values
+-- Functions for unfolding each type of declaration
 
+-- Total order declaration
 addTotalOrder :: Term -> Term -> Term -> State -> State
 addTotalOrder prefix size sort state = state { members = newMembers, values = newValues }
     where
@@ -568,16 +570,56 @@ addTotalOrder prefix size sort state = state { members = newMembers, values = ne
         totalOrder = map (\t -> Index prefix [t]) rangeTerms
         rangeTerms = map (\i -> Leaf |> T.pack |> show i) [1..sizeValue]
         sizeValue = asSize size state
-        valuesMap = Dict.fromList |> map makeValue [1..(sizeValue - 1)]  -- 
+        valuesMap = Dict.fromList |> map makeValue [1..sizeValue]  -- 
         makeValue i = ((Index prefix [Leaf |> T.pack |> show i], next), Index prefix [Leaf |> T.pack |> show |> i + 1])    -- (i, next) = i + 1
         next = Leaf "next"
 
+-- Function declarations
 addFunction :: Term -> [Term] -> Term -> State -> State
 addFunction f domain image state = state { images = newImages, domains = newDomains, functions = newFunctions }
     where
         newImages = Dict.insert f image (images state)
         newDomains = Dict.insert f domain (domains state)
         newFunctions = f:(functions state)
+
+-- Attribute declarations
+addAttributes :: Term -> Term -> State -> State
+addAttributes term value state = massUpdate state |> map addAssignment attributeAssignments
+    where
+        addAssignment (x, y) = (Assignment x y)
+        attributeAssignments = []
+
+------------------------------------------------------------------------------------------------
+
+-- Functions for grounding and applying declarations
+
+massUpdate :: State -> [Declaration] -> State
+massUpdate state [] = state
+massUpdate state (d:ds) = massUpdate (stateUpdate d state) ds
+
+-- No duplica funcionalidad de grounding esto?
+groundAndUpdate :: Declaration -> State -> State
+groundAndUpdate declaration state = massUpdate state declarationGroundings
+    where
+        ground_ assignment = checkGround_ declaration assignment
+        declarationGroundings = map ground_ allAssignments
+        allAssignments = getAssignments declaration state
+        isGround_ expression = isGround expression (Set.fromList |> variables state)
+        checkGround_ declaration_ assignment | isGround_ declaration_ = declaration_
+        checkGround_ declaration_ assignment | otherwise = replace declaration_ assignment
+
+applyDeclarations :: [Declaration] -> State
+applyDeclarations [] = emptyState
+applyDeclarations (d:ds) = groundAndUpdate d (applyDeclarations ds)
+
+-------------------------------------------------------------------------------------------------------------------------
+
+dependencies :: Declaration -> [Declaration] -> Set Declaration
+dependencies d ds = Set.empty
+
+-- Sort by inclusion of dependencies
+sortDeclarations :: [Declaration] -> [Declaration]
+sortDeclarations xs = xs 
 
 -- If a term has an interpretation as an integer (it is either a sequence of digits or a parameter),
 -- return that integer. Otherwise, raise an exception.
@@ -590,13 +632,18 @@ asSize _ state = error "In order to be converted to a size, a term must be eithe
 -- Encodings and Formulas -------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
--- Evaluate all dot terms using the values in State
+-- Evaluate all dot terms using the values in 'state'
+
 evaluate :: Expression a => a -> State -> a
-evaluate expression state = mapLeaves expression evalTerms
+evaluate expression state = fixpoint_
     where
+        expression_ = mapLeaves expression evalTerms
         evalTerms :: Term -> Term
-        evalTerms (Attribute t s) = Dict.findWithDefault (Leaf "error") (t, s) (values state)
+        evalTerms (Attribute t s) = Dict.findWithDefault (error |> show t ++ " " ++ show s) (evaluate t state, s) (values state)
         evalTerms t = t
+        fixpoint_
+            | (expression == expression_) = expression
+            | (expression /= expression_) = evaluate expression_ state
 
 -- Encode the unique name assumption for a list of terms as a list of formulas
 
@@ -610,9 +657,7 @@ uniqueNameAssumption terms = concat |> map unaFormula |> sequence [terms, terms]
         areEqual x y = Assertion [Mono |> Positive |> equalityAtom x y]
         areNotEqual x y = Assertion [Mono |> Negative |> equalityAtom x y]
 
-
 -- Encode a function (a relation that's injective and surjective)
-
 encodeFunction :: Term -> [[Term]] -> [Term] -> [Formula]
 encodeFunction functionName domain image = encodeValues ++ encodeBounds 
     where
@@ -675,10 +720,8 @@ bitConstraints f args m = concat |> map bitFormulas bitIndices
 -- `from` is the first forbidden value, `to` is the last
 forbidOffBounds :: Term -> Int -> Int -> [[Term]] -> Int -> [Formula]
 forbidOffBounds f from to domain imageSize = [forbidIndexBits f elem index imageSize | elem <- domain, index <- [from..to]]
-        
 
-------------------------------------------------------------------------------------------
-
+-- Auxiliary functions for indexing 'value bits'
 enumerate :: [a] -> [(Int, a)]
 enumerate [] = []
 enumerate xs = enn 0 xs
@@ -686,8 +729,6 @@ enumerate xs = enn 0 xs
 enn :: Int -> [a] -> [(Int, a)]
 enn _ [] = []
 enn n (x:xs) = (n, x):(enn (n + 1) xs)
-
-------------------------------------------------------------------------------------------
 
 -- Encode the xor of two literals as a list of formulas
 eitherFrom :: Literal -> Literal -> [Formula]
@@ -698,18 +739,13 @@ eitherFrom phi psi = [Disjunction both, Contradiction both]
         both = [phi_, psi_]
 
 ------------------------------------------------------------------------------------------
--- Variables, ground vs non-ground formulas, and assignments -----------------------------
+-- Functions used for grounding formulas -------------------------------------------------
 ------------------------------------------------------------------------------------------
 
--- a) check if `check` works with the variables in Poly expressions
--- b) make test cases for isGround (Poly head body) stateVariables
-
-------------------------------------------------------------------------------------------
-
-------------------------------------------------------------------------------------------
+-- Ground an expression, given a state
 
 grounding :: (Expression a, NFData a) => a -> State -> [a]
-grounding expression state | check expression = [expression] -- [evaluate expression state], to evaluate dot terms
+grounding expression state | check expression = [evaluate expression state] -- [evaluate expression state], to evaluate dot terms
     where
         check expression_ = isGround expression_ stateVariables
         stateVariables = Set.fromList |> variables state      
@@ -717,9 +753,6 @@ grounding expression state | otherwise = concat |> map (\x -> grounding x state)
     where
         check expression_ = isGround expression_ stateVariables
         stateVariables = Set.fromList |> variables state
-
-emptyTerm :: Term -- TODO: parser must reject empty terms. Ensure it does, ensure that's known.
-emptyTerm = (Leaf "")
 
 -- Do the 'partial' grounding without having to check every time if the result is ground. TODO: is this really more efficient?
 unpackAndGround :: (Expression a, NFData a) => a -> State -> Set T.Text -> [a]
@@ -729,12 +762,13 @@ unpackAndGround expression state stateVars = groundingStep expression allRanges 
         allRanges = Dict.fromList |> map (\v -> (v, getVar v)) expressionVariables
         getVar = retrieve (ranges state) (members state)
 
---------------------------------------------------------------------------------------------------------------
-
-retrieve :: Dict.Map T.Text Term -> Dict.Map Term [Term] -> (T.Text -> [Term])
-retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefault emptyTerm var ranges_) members_)
-
---------------------------------------------------------------------------------------------------------------
+groundingStep :: (Expression a, NFData a) => a -> Dict.Map T.Text [Term] -> [T.Text] -> Dict.Map Term [Term] -> [a]
+groundingStep expression ranges variables members = map bind allAssignments `using` parListChunk 1000 rdeepseq
+    where
+        bind binding = bindAny expression fixedMembers binding
+        allAssignments = assignments expression fixedRanges variables
+        !fixedRanges = force ranges
+        !fixedMembers = force members
 
 bindPoly :: Conjunction -> Dict.Map Term [Term] -> Dict.Map T.Text Term -> Conjunction
 bindPoly (Poly head body) members globalAssignment = Poly [] |> (concat |> map makeMono localAssignments)
@@ -745,13 +779,13 @@ bindPoly (Poly head body) members globalAssignment = Poly [] |> (concat |> map m
         localRanges = Dict.fromList |> map (\(x, y) -> (tshow x, Dict.findWithDefault (error "Empty sort") y members)) head
 bindPoly any _ globalAssignment = replace any globalAssignment
 
-groundingStep :: (Expression a, NFData a) => a -> Dict.Map T.Text [Term] -> [T.Text] -> Dict.Map Term [Term] -> [a]
-groundingStep expression ranges variables members = map bind allAssignments `using` parListChunk 1000 rdeepseq
-    where
-        bind binding = bindAny expression fixedMembers binding
-        allAssignments = assignments expression fixedRanges variables
-        !fixedRanges = force ranges
-        !fixedMembers = force members
+-- Obtain a map from variable names to their ranges
+retrieve :: Dict.Map T.Text Term -> Dict.Map Term [Term] -> (T.Text -> [Term])
+retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefault emptyTerm var ranges_) members_)
+
+--------------------------------------------------------------------------------------------------------------
+
+-- Functions for obtaining valid assignments of values to variables
 
 -- Check if `expression` can be substituted with _ there (i.e. if it is not used in the function body)
 assignments :: (Expression a, NFData a) => a -> Dict.Map T.Text [Term] -> [T.Text] -> [Dict.Map T.Text Term]
@@ -761,15 +795,28 @@ assignments expression ranges variables = map makeAssignment product
         makeAssignment xs = Dict.fromList |> zip variables xs
         retrieve_ var = Dict.findWithDefault [] var ranges
 
+getAssignments :: (Expression a, NFData a) => a -> State -> [Dict.Map T.Text Term]
+getAssignments expression state = assignments expression variableRanges expressionVariables
+    where
+        expressionVariables = Set.toList |> collect expression |> Set.fromList stateVariables
+        variableRanges = Dict.fromList |> map getRange stateVariables
+        stateVariables = variables state
+        getRange variable = (variable, retrieve (ranges state) (members state) |> variable)
+        
+---------------------------------------------------------------------------------------------------------------
+--- Map Lists of Declarations to States, and Map States and Rules to Ground Formulae --------------------------
 ---------------------------------------------------------------------------------------------------------------
 
----------------------------------------------------------------------------------------------------------------
---- Map Lists of Declarations to States, Map States and Rules to Ground Formulae ------------------------------
----------------------------------------------------------------------------------------------------------------
-
+-- TODO: ordenar las declaraciones por el orden correcto de evaluación antes de llamar esto
 getState :: [Declaration] -> State
 getState [] = emptyState
-getState (d:declarations) = stateUpdate d (getState declarations)
+getState (d:declarations) = applyDeclaration d (getState declarations)
+    where
+        applyDeclaration d_ state | isGround_ d_ state = stateUpdate d_ state
+        applyDeclaration d_ state | otherwise = groundAndUpdate d_ state
+        isGround_ d_ state = isGround d_ (Set.fromList |> variables state)
+
+-----------------------------------------------------------------------------------------------------------
 
 unfoldInstance :: State -> [Formula] -> [Formula]
 unfoldInstance state rules = allFunctionEncodings ++ ruleGroundings ++ unaEncoding ++ negationEncoding
@@ -778,6 +825,8 @@ unfoldInstance state rules = allFunctionEncodings ++ ruleGroundings ++ unaEncodi
         ruleGroundings = concat |> map (\x -> grounding x state) rules
         unaEncoding = []
         negationEncoding = encodeNegation state rules
+
+----------------------------------------------------------------------------------------------------------------
 
 encodeAllFunctions :: State -> [Formula]
 encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListChunk 1000 rdeepseq)
@@ -820,73 +869,16 @@ getRules (_:statements) = getRules statements
 --------------------------------------------------------------------------------------
 
 programState :: [Statement] -> State
-programState program = getState |> getDeclarations |> program
+programState program = getState |> sortDeclarations |> getDeclarations |> program
+
+---------------------------------------------------------------------------------------
+-- Evaluate a Program -----------------------------------------------------------------
+---------------------------------------------------------------------------------------
+
+-- The semantics of a program / the equivalent propositional theory 
 
 getGamma :: [Statement] -> [Formula]
 getGamma program = unfoldInstance state rules
     where
         state = programState program
         rules = getRules program
-
----------------------------------------------------------------------------------------
-
----------------------------------------------------------------------------------------------------------------
--- Errors and Warnings ----------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------------
-
-------------------------------------------------------------------------------------------
--- Tests ---------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------
-
----------------------------------------------------------------------------------------------------------
---- TODOS y preguntas -----------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------------------
-
------------------------------------------------------------------------
--- CASOS DE ERROR -----------------------------------------------------
------------------------------------------------------------------------
-
--- ERROR DE SINTAXIS
-
--- DECLARACIONES CÍCLICAS
--- El grafo de depenendencias de las declaraciones no es acíclico
-
--- DECLARACIÓN DE VARIABLE INCONSISTENTE
--- Se declara dos veces una misma variables con distinto rango
-
--- DECLARACIÓN DE FUNCIÓN INCONSISTENTE (mismo dominio, distinta imagen)
-
--- MÓDULO NO ENCONTRADO
-
--- ATRIBUTO SIN DEFINICIÓN
--- Al intentar evaluar a.f, se encuentra que el mapa de valores no tiene un atributo f definido para el término a
-
--- TÉRMINO EN DECLARACIÓN DE ORDEN TOTAL NO ES UN NÚMERO
--- El término que usaste para definir un orden total no se puede interpretar como un cardinal
-
--- LHS DE DECLARACIÓN DE ASIGNACIÓN NO ES UN ATRIBUTO
--- tenés a = b, pero a no es de la forma c.f
-
--- LAS VARIABLES LOCALES NO DEBEN SER VARIABLES REGISTRADAS COMO VARIABLES GLOBALES DE LA ESPECIFICACIÓN
-
------------------------------------------------------------------------
--- ADVERTENCIAS -------------------------------------------------------
------------------------------------------------------------------------
-
--- EQUIVALENCIA IMPAR
-
--- SORT VACÍO
-
--- GROUNDING VACÍO
-
--- ATRIBUTO SOBREESCRITO
-
--- RANGO DE VARIABLE ESTÁ VACÍO
-
------------------------------------------------------------------------
--- REQUISITOS DE PREPROCESAMIENTO -------------------------------------
------------------------------------------------------------------------
-
--- Sustitución de operaciones -----------------------------------------
-
--- Sustitución de símbolos especiales de comparaciones ----------------

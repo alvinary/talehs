@@ -11,14 +11,12 @@ import Parser
 %error        { Parser.parseError }       -- Name of the function to call if an error occurs during parsing
 %errorhandlertype explist
 
-
-%right '.'
 %nonassoc '<' '>' '=' '->' '<->' '|' '{' '}'
-%right '+' '*'
 %right ','
-%left '+' '-'
+%right '+' '-'
 %left '*' '/'
 %right 'x'
+%left '.'
 
 %token
 leaf     { Parser.TokenLeaf ($$) }        
