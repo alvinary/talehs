@@ -13,8 +13,7 @@ import qualified Data.Map as Map
 -- before <==>, 'ignoring' the intended token (TokenIff)
 
 tokenShapes :: [(String, Token)]
-tokenShapes = [(".\n", TokenSeparator),
-               ("<=>", TokenIff),
+tokenShapes = [("<=>", TokenIff),
                ("not", TokenNot), 
                ("->", TokenArrow),  
                ("False", TokenBottom), 
@@ -33,7 +32,8 @@ tokenShapes = [(".\n", TokenSeparator),
                (")", TokenCloseParenthesis),
                ("[", TokenOpenBrackets),
                ("]", TokenCloseBrackets),
-               (",", TokenComma)]
+               (",", TokenComma),
+               (".", TokenDot)]
 
 infixr 0 |>
 (|>) :: (a -> b) -> a -> b
