@@ -519,6 +519,7 @@ data State = State {
 	indices    :: Dict.Map Term [Term],      -- Map the head of an indexed term to the signature of its indices
     values     :: Dict.Map (Term, Term) Term -- Map f t to f(t)
 }
+    deriving Show
 
 emptyState = State Dict.empty [] Dict.empty [] Dict.empty Dict.empty Dict.empty Dict.empty Dict.empty
 
@@ -551,7 +552,10 @@ stateUpdate (Variable ts t) state = state { ranges = split (massFlatten ts) t (r
         newVariables = massFlatten ts -- en realidad, es cada nueva variable que creaste, con las sustituciones pertinentes
 stateUpdate (Order prefix size sort) state = addTotalOrder prefix size sort state
 stateUpdate (Function f domain image) state = addFunction f domain image state
-stateUpdate (Assignment (Attribute t f) s) state = state { values = Dict.insert (t, f) s (values state) }
+stateUpdate (Assignment (Attribute t f) s) state = state { values = Dict.insert (t_, f) s_ (values state) }
+    where
+        t_ = evaluate t state
+        s_ = evaluate s state
 -- stateUpdate (Parameters ts) state = state { parameters = Dict.fromList |> getParameters ts }
 stateUpdate _ state = error "Undefined state update"
 
@@ -603,6 +607,10 @@ groundAndUpdate declaration state = massUpdate state declarationGroundings
         isGround_ expression = isGround expression (Set.fromList |> variables state)
         checkGround_ declaration_ assignment | isGround_ declaration_ = declaration_
         checkGround_ declaration_ assignment | otherwise = replace declaration_ assignment
+
+applyDeclarations :: [Declaration] -> State
+applyDeclarations [] = emptyState
+applyDeclarations (d:ds) = groundAndUpdate d (applyDeclarations ds)
 
 -------------------------------------------------------------------------------------------------------------------------
 
