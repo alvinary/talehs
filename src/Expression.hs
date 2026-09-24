@@ -431,7 +431,13 @@ data Declaration = Constant [Term] Term        -- const a, b, c : A
     deriving (Eq, Ord, Generic, NFData)
 
 instance TShow Declaration where
-    tshow d = ""
+    tshow (Constant ts t) = "const " <> ttshow ts <> " : " <>  tshow t
+    tshow (Order p s a) = "order " <> tshow p <> " " <> tshow s <> " " <> tshow a
+    tshow (Function f ds im) = "let " <> tshow f <> " : " <> ttshow ds <> " -> " <> tshow im
+    tshow  (Variable ts t) = "var " <> ttshow ts <> " : " <>  tshow t
+    tshow (Assignment t f) = "let " <> tshow t <> " = " <> tshow f
+    tshow (Parameters ts) = "params " <> ttshow ts
+    tshow (Module t bs) = "module M { a1 : b1 }"
 
 instance Show Declaration where
     show expr = show |> tshow expr
