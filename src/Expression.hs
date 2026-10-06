@@ -49,7 +49,7 @@ ttshow :: TShow a => [a] -> T.Text
 ttshow [] = ""
 ttshow xs = intercalate ", " |> map tshow xs
 
-showInLines xs = TIO.putStrLn |> intercalate "\n\n" (map tshow xs)
+showInLines xs = TIO.putStrLn |> intercalate "\n" (map tshow xs)
 
 showThing t = tshow t
 
@@ -194,7 +194,14 @@ class Ord a => Expression a where
 
 instance Expression Term where
 
+    mapLeaves (Index t ts) f = (Index t_ ts_)
+        where
+            t_ = f t
+            ts_ = map (\x -> mapLeaves x f) ts
+
     mapLeaves term f = f term
+
+    -- mapLeaves should be the general case of replace, where f is replacing with bindings
 
     replace term binding | Dict.member (tshow term) binding = Dict.findWithDefault (Leaf "error") (tshow term) binding
 
@@ -431,14 +438,20 @@ data Declaration = Constant [Term] Term        -- const a, b, c : A
     deriving (Eq, Ord, Generic, NFData)
 
 instance TShow Declaration where
-    tshow d = ""
+    tshow (Constant ts t) = "const " <> ttshow ts <> " : " <>  tshow t
+    tshow (Order p s a) = "order " <> tshow p <> " " <> tshow s <> " " <> tshow a
+    tshow (Function f ds im) = "let " <> tshow f <> " : " <> ttshow ds <> " -> " <> tshow im
+    tshow  (Variable ts t) = "var " <> ttshow ts <> " : " <>  tshow t
+    tshow (Assignment t f) = "let " <> tshow t <> " = " <> tshow f
+    tshow (Parameters ts) = "params " <> ttshow ts
+    tshow (Module t bs) = "module M { a1 : b1 }"
 
 instance Show Declaration where
     show expr = show |> tshow expr
 
 instance Expression Declaration where
 
-    mapLeaves d f = d
+    mapLeaves d f = d -- TODO
 
     replace (Constant ts t) binding = (Constant ts_ t_)
         where
@@ -639,7 +652,7 @@ evaluate expression state = fixpoint_
     where
         expression_ = mapLeaves expression evalTerms
         evalTerms :: Term -> Term
-        evalTerms (Attribute t s) = Dict.findWithDefault (error |> show t ++ " " ++ show s) (evaluate t state, s) (values state)
+        evalTerms (Attribute t s) = Dict.findWithDefault (error |> show t ++ " " ++ show s) (evaluate t state, s) (values state) -- TODO: evaluate s?
         evalTerms t = t
         fixpoint_
             | (expression == expression_) = expression
