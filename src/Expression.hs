@@ -49,7 +49,7 @@ ttshow :: TShow a => [a] -> T.Text
 ttshow [] = ""
 ttshow xs = intercalate ", " |> map tshow xs
 
-showInLines xs = TIO.putStrLn |> intercalate "\n\n" (map tshow xs)
+showInLines xs = TIO.putStrLn |> intercalate "\n" (map tshow xs)
 
 showThing t = tshow t
 
@@ -451,7 +451,7 @@ instance Show Declaration where
 
 instance Expression Declaration where
 
-    mapLeaves d f = d
+    mapLeaves d f = d -- TODO
 
     replace (Constant ts t) binding = (Constant ts_ t_)
         where
@@ -895,3 +895,55 @@ getGamma program = unfoldInstance state rules
     where
         state = programState program
         rules = getRules program
+
+----------------------------------------------------------------------------------------
+
+{- 
+-- This is garbage and a couple lines of C++ will do a better job mapping the gamma
+-- from getGamma to DIMACS directly
+
+
+dimacsIndex :: State -> [Formula] -> (Dict.Map Literal Int, Dict.Map Int Literal)
+dimacsIndex state rules = (toDimacs, fromDimacs)
+    where
+        allAtoms :: [Atom]
+        allAtoms = Set.toList |> bigUnion |> map atoms rules
+        groundAtom atom = grounding atom state
+        allGroundAtoms = concat |> map groundAtom allAtoms
+        allGroundLiterals = map Positive allGroundAtoms ++ map Negative allGroundAtoms
+        fromDimacs = Dict.fromList |> zip [1..] allGroundLiterals
+        toDimacs = Dict.fromList |> zip allGroundLiterals [1..]
+
+encodeDimacs :: [Formula] -> Dict.Map Literal Int -> [[Int]]
+encodeDimacs groundFormulas index = concat |> map (\x -> mapDimacs x fixedIndex) groundFormulas
+    where
+        !fixedIndex = force index 
+
+mapLiteral :: Literal -> Dict.Map Literal Int -> Int
+mapLiteral literal index = Dict.findWithDefault 0 literal index
+
+conjunctionLiterals :: Conjunction -> [Literal]
+conjunctionLiterals (Mono l) = [l]
+conjunctionLiterals (Poly [] body) = body
+conjunctionLiterals (Poly _ body) = error "Cannot extract literals from non-grounded Poly conjunct"
+
+-- T____T
+mapDimacs :: Formula -> Dict.Map Literal Int -> [[Int]]
+mapDimacs (Contradiction cs) index = [(map (\x -> -(mapLiteral x index)) cs_) ++ [0]]
+    where
+        cs_ = concat |> map conjunctionLiterals cs
+mapDimacs (Disjunction cs) index = [(map (\x -> mapLiteral x index) cs_) ++ [0]]
+    where
+        cs_ = concat |> map conjunctionLiterals cs
+mapDimacs (Assertion cs) index = map (\x -> [mapLiteral x index] ++ [0]) cs_
+    where
+        cs_ = concat |> map conjunctionLiterals cs
+mapDimacs (Equivalence lh rh) index = [] -- TODO
+mapDimacs (Implication lh rh) index = map (\x -> lh_ ++ [x] ++ [0]) rh_
+    where
+        lh_ = map (\x -> -(mapLiteral x index)) (concat |> map conjunctionLiterals lh)
+        rh_ = map (\x -> mapLiteral x index) (concat |> map conjunctionLiterals rh)
+
+-- readDimacs
+
+--}
