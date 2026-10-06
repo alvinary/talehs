@@ -8,8 +8,8 @@ import Parser
 
 %name read                                -- Name of the function Happy will generate
 %tokentype    { Parser.Token }            -- Type of the Start non-terminal
+%monad        { Either String }
 %error        { Parser.parseError }       -- Name of the function to call if an error occurs during parsing
-%errorhandlertype explist
 
 %nonassoc '<' '>' '=' '->' '<->' '|' '{' '}'
 %right ','

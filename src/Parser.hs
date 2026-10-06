@@ -101,7 +101,9 @@ data Token  = TokenLeaf String
             | TokenLess
     deriving Show
 
-parseError = error "Parse error D:"
+parseError :: ([Token], [String]) -> a
+parseError (t : _, expected) = error ("unexpected " ++ show t ++ "; expected one of: " ++ unwords expected)
+parseError ([], expected)    = error ("unexpected end of input; expected one of: " ++ unwords expected)
 
 tokenize :: Text.Text -> [Token]
 tokenize text = map readToken |> splitTokens adaptedText
