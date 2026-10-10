@@ -10,19 +10,23 @@ import Parser
 %tokentype    { Parser.Token }            -- Type of the Start non-terminal
 %monad        { Either String }
 %error        { Parser.parseError }       -- Name of the function to call if an error occurs during parsing
+%errorhandlertype explist
 
 %nonassoc '<' '>' '=' '->' '<->' '|' '{' '}'
+%right '&'
 %right ','
 %right '+' '-'
 %left '*' '/'
 %right 'x'
 %left '.'
+%left '['
 
 %token
 leaf     { Parser.TokenLeaf ($$) }        
 not      { Parser.TokenNot }
 arrow    { Parser.TokenArrow }
 iff      { Parser.TokenIff }
+'&'      { Parser.TokenVee }
 bottom   { Parser.TokenBottom }
 const    { Parser.TokenConstant }
 var      { Parser.TokenVariable }
@@ -66,11 +70,15 @@ Declaration : const TermSequence ':' Term      { Expression.Constant      $2 $4 
 Rule :  Conj arrow bottom                      { Expression.Contradiction     $1 }
      |  Conj arrow Conj                        { Expression.Implication    $1 $3 }
      |  Conj iff Conj                          { Expression.Equivalence    $1 $3 }
+     |  Disj                                   { Expression.Disjunction       $1 }
      |  Conj                                   { Expression.Assertion         $1 }
 
-Comparison : '<'                               { $1 }
-           | '>'                               { $1 }
-           | '='                               { $1 }
+Comparison : '<'                               { Leaf (T.pack "<") }
+           | '>'                               { Leaf (T.pack ">") }
+           | '='                               { Leaf (T.pack "=") }
+
+Disj : Literal '&' Disj                         { (Expression.Mono $1):$3 }
+     | Literal '&' Literal                      { [Expression.Mono $1, Expression.Mono $3] }
 
 Conj : Literal                                 { [Expression.Mono $1] }
      | Polyadic                                { [$1] }
@@ -86,7 +94,7 @@ Literal : not Atom                                { Expression.Negative $2 }
         | Atom                                    { Expression.Positive $1 }
 
 Atom : Term '(' TermSequence ')'        { Expression.Relation $1 $3                }
-     | Term Comparison Term             { Expression.Comparison $1 (Leaf (T.pack "<")) $3   }
+     | Term Comparison Term             { Expression.Comparison $1 $2 $3  }
 
 TermPairSequence : Term ':' Term                       { [($1, $3)] }
                  | TermPairSequence ',' Term ':' Term  { $1 ++ [($3, $5)] }

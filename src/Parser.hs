@@ -23,6 +23,7 @@ tokenShapes = [("<=>", TokenIff),
                ("order", TokenOrder),
                ("params", TokenParameters),
                ("module", TokenModule),
+               ("&", TokenVee),
                ("{", TokenBegin),
                ("}", TokenEnd),
                ("|", TokenQuantify),
@@ -33,7 +34,6 @@ tokenShapes = [("<=>", TokenIff),
                ("[", TokenOpenBrackets),
                ("]", TokenCloseBrackets),
                (",", TokenComma),
-               ("=", TokenEquals),
                (".", TokenDot)]
 
 infixr 0 |>
@@ -99,6 +99,7 @@ data Token  = TokenLeaf String
             | TokenBegin
             | TokenEnd
             | TokenLess
+            | TokenVee
     deriving Show
 
 parseError :: ([Token], [String]) -> a
