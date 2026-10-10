@@ -98,4 +98,4 @@ main = do
             --stateRepresentation :: String -> String
             --stateRepresentation s = show $ Expression.programState $ map Solu.parse $ map Text.pack $ lines $ s
             theory :: String -> String
-            theory s = List.intercalate "\n" $ map show $ Expression.getGamma $ map Solu.parse $ map Text.pack $ lines $ s
+            theory s = List.intercalate "\n" $ map show (Expression.getGamma $ map Solu.parse $ map Text.pack $ lines $ s)
