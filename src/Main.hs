@@ -3,6 +3,7 @@
 import qualified Reader
 import qualified Expression
 import qualified Parser
+import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified TestSolve as Solu
 import System.IO
@@ -10,8 +11,9 @@ import Options.Applicative
 import Control.Monad (join)
 import qualified Data.Text.IO as TIO
 import Control.DeepSeq (NFData, force)
+import qualified Solve
+import qualified Data.Map as Map
 
-{-
 data Session = Session {
     programPath :: String,
     models :: Int,
@@ -19,6 +21,11 @@ data Session = Session {
     relations :: [String],
     store :: Bool
 }
+
+statements :: String -> [Expression.Statement]
+statements text = case Reader.read (Parser.tokenize $ Text.pack text) of
+    Right sts -> sts
+    Left err    -> error err
 
 readRelations :: String -> [String]
 readRelations text = map Text.unpack $ Text.splitOn comma $ Text.pack text
@@ -33,18 +40,7 @@ readParameters params = map splitTuple $ map (Text.splitOn colon)  $ Text.splitO
 
 splitTuple :: [Text.Text] -> (String, Int)
 splitTuple [parameter, value] = (Text.unpack parameter, read $ Text.unpack value)
-splitTuple arg = error ("Expected a list of the form [parameter, value], received instead: " ++ tshow arg)
-
-statements :: String -> [Expression.Statement]
-statements text = Reader.read $ Parser.tokenize $ Text.pack text
-
-{-
-main :: IO ()
-main = do
-    contents <- readFile path    
-    let fileLines = lines contents
-    mapM_ putStrLn fileLines
--}
+splitTuple arg = error ("Expected a list of the form [parameter, value], received instead: " ++ (concat $ map Text.unpack $ arg))
 
 session :: Parser Session
 session = Session
@@ -79,8 +75,11 @@ session = Session
           <> short 's'
           <> help "Whether to store the output models to a file." )
 
-run :: Session -> String
-run (Session program models parameters relations store) = program ++ tshow parameters ++ tshow models ++ tshow relations
+sessionPath :: Session -> String
+sessionPath (Session program models parameters relations store) = program
+
+sessionModels :: Session -> Int
+sessionModels (Session program models parameters relations store) = models
 
 userInput :: IO Session
 userInput = execParser opts
@@ -89,15 +88,14 @@ userInput = execParser opts
                     ( fullDesc
                     <> progDesc "Find finite models for syntactically restricted first order theories, similar to an answer set programming engine or logic programming language."
                     <> header "Tale.hs" )
--}
-main = do
-    let !lala = force Solu.taoqi
-    return ()
 
-{-
-do
+main = do
     sessionData <- userInput
-    let placeholderOutput = run sessionData
-    putStrLn placeholderOutput
-    return ()
--}
+    surcho <- readFile (sessionPath sessionData)
+    --putStrLn $ stateRepresentation surcho ++ "\n\n" ++ theory surcho
+    putStrLn $ theory surcho
+        where 
+            --stateRepresentation :: String -> String
+            --stateRepresentation s = show $ Expression.programState $ map Solu.parse $ map Text.pack $ lines $ s
+            theory :: String -> String
+            theory s = List.intercalate "\n" $ map show $ Expression.getGamma $ map Solu.parse $ map Text.pack $ lines $ s
