@@ -14,6 +14,7 @@ def reverse_index(index_):
     return reverse_index
 
 def map_line(line):
+    line = line.replace('"', "")
     line = line.replace(" ", "")
     if "=>" in line:
         lhs, rhs = line.split("=>")

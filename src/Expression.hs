@@ -576,8 +576,9 @@ stateUpdate _ state = error "Undefined state update"
 
 -- Total order declaration
 addTotalOrder :: Term -> Term -> Term -> State -> State
-addTotalOrder prefix size sort state = state { members = newMembers, values = newValues }
+addTotalOrder prefix size sort state = state { members = allMembers, values = newValues }
     where
+        allMembers = Dict.union (members state) newMembers
         newMembers = fuse sort totalOrder (members state)
         newValues = Dict.union (values state) valuesMap     -- pisa a la izq? -- deberiamos tirar una warning si se pisan values?
         totalOrder = map (\t -> Index prefix [t]) rangeTerms
