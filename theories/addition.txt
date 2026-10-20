@@ -1,0 +1,22 @@
+order nat 50 : Naturals
+order ind 16 : Index
+const zero, one : Bits
+var x, y : Naturals
+var n, m : Numbers
+var i : Index
+var b : Bits
+bit (x, i, zero) & bit (x, i, one)
+bit (x, i, zero), bit (x, i, one) -> False
+bit (sum[x, y], i, zero) & bit (sum[x, y], i, one)
+bit (sum[x, y], i, zero), bit (sum[x, y], i, one) -> False
+carry (sum[x, y], i, zero) & carry (sum[x, y], i, one)
+carry (sum[x, y], i, zero), carry (sum[x, y], i, one) -> False
+carry (sum[x, y], ind[1], zero)
+bit (x, i, zero), bit (y, i, zero), carry (sum[x, y], i, zero) -> bit (sum[x, y], i, zero), carry(sum[x, y], i.next, zero)
+bit (x, i, zero), bit (y, i, zero), carry (sum[x, y], i, one) -> bit (sum[x, y], i, one), carry(sum[x, y], i.next, zero)
+bit (x, i, zero), bit (y, i, one), carry (sum[x, y], i, zero) -> bit (sum[x, y], i, one), carry(sum[x, y], i.next, zero)
+bit (x, i, one), bit (y, i, zero), carry (sum[x, y], i, zero) -> bit (sum[x, y], i, one), carry(sum[x, y], i.next, zero)
+bit (x, i, one), bit (y, i, one), carry (sum[x, y], i, zero) -> bit (sum[x, y], i, zero), carry(sum[x, y], i.next, one)
+bit (x, i, one), bit (y, i, zero), carry (sum[x, y], i, one) -> bit (sum[x, y], i, zero), carry(sum[x, y], i.next, one)
+bit (x, i, zero), bit (y, i, one), carry (sum[x, y], i, one) -> bit (sum[x, y], i, zero), carry(sum[x, y], i.next, one)
+bit (x, i, one), bit (y, i, one), carry (sum[x, y], i, one) -> bit (sum[x, y], i, one), carry(sum[x, y], i.next, one)
