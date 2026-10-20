@@ -29,6 +29,7 @@ dependencies:
 - deepseq
 - array
 - optparse-applicative
+- process
 
 ghc-options:
 - -Wall
