@@ -13,6 +13,7 @@ import qualified Data.Text.IO as TIO
 import Control.DeepSeq (NFData, force)
 import qualified Solve
 import qualified Data.Map as Map
+import System.Process (readProcess)
 
 data Session = Session {
     programPath :: String,
@@ -25,7 +26,7 @@ data Session = Session {
 statements :: String -> [Expression.Statement]
 statements text = case Reader.read (Parser.tokenize $ Text.pack text) of
     Right sts -> sts
-    Left err    -> error err
+    Left err  -> error err
 
 readRelations :: String -> [String]
 readRelations text = map Text.unpack $ Text.splitOn comma $ Text.pack text
@@ -91,9 +92,10 @@ userInput = execParser opts
 
 main = do
     sessionData <- userInput
-    surcho <- readFile (sessionPath sessionData)
-    --putStrLn $ stateRepresentation surcho ++ "\n\n" ++ theory surcho
-    putStrLn $ theory surcho
+    statements <- readFile (sessionPath sessionData)
+    --putStrLn $ stateRepresentation surcho ++ "\n\n" ++ theory statements
+    modelsText <- readProcess "python" ["dimacs_map.py"] ((show $ sessionModels sessionData) ++ "\n" ++ theory statements)
+    putStrLn modelsText
         where 
             --stateRepresentation :: String -> String
             --stateRepresentation s = show $ Expression.programState $ map Solu.parse $ map Text.pack $ lines $ s
