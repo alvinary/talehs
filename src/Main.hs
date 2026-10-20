@@ -93,9 +93,9 @@ userInput = execParser opts
 main = do
     sessionData <- userInput
     statements <- readFile (sessionPath sessionData)
-    --putStrLn $ stateRepresentation surcho ++ "\n\n" ++ theory surcho
-    out <- readProcess "python" ["dimacs_map.py"] ((show $ sessionModels sessionData) ++ "\n" ++ theory statements)
-    putStrLn out
+    --putStrLn $ stateRepresentation surcho ++ "\n\n" ++ theory statements
+    modelsText <- readProcess "python" ["dimacs_map.py"] ((show $ sessionModels sessionData) ++ "\n" ++ theory statements)
+    putStrLn modelsText
         where 
             --stateRepresentation :: String -> String
             --stateRepresentation s = show $ Expression.programState $ map Solu.parse $ map Text.pack $ lines $ s
