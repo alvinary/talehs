@@ -35,7 +35,7 @@ s = Solver(name='glucose3')
 def show(index_, literal):
     return index_[abs(literal)]
 
-n = 15
+n = int(input())
 
 for line in sys.stdin:
     line = line.rstrip("\n")
