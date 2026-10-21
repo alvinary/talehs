@@ -22,7 +22,7 @@ parse text =
     tokens = Parser.tokenize text
 
 errorText (t : ts, expected, remaining, tokens) = error ("unexpected " ++ show t ++ ";\nexpected one of: " ++ unwords expected ++ ";\ntokens remaining in current line: \n" ++ (unwords $ map showToken remaining) ++ "\n In line: " ++  (unwords $ map showToken tokens))
-errorText ([], expected, remaining, tokens)     = error ("unexpected end of input; expected one of: " ++ unwords expected ++ ";\n Runned out of input while reading " ++ (unwords $ map showToken tokens))
+errorText ([], expected, remaining, tokens)     = error ("unexpected end of input; expected one of: " ++ unwords expected ++ ";\nRan out of input while reading " ++ (unwords $ map showToken tokens))
 
 
 extract :: Statement -> Declaration
