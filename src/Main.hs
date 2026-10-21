@@ -23,11 +23,6 @@ data Session = Session {
     store :: Bool
 }
 
-statements :: String -> [Expression.Statement]
-statements text = case Reader.read (Parser.tokenize $ Text.pack text) of
-    Right sts -> sts
-    Left err  -> error err
-
 readRelations :: String -> [String]
 readRelations text = map Text.unpack $ Text.splitOn comma $ Text.pack text
     where
@@ -89,6 +84,15 @@ userInput = execParser opts
                     ( fullDesc
                     <> progDesc "Find finite models for syntactically restricted first order theories, similar to an answer set programming engine or logic programming language."
                     <> header "Tale.hs" )
+
+
+-- statements_ = substituteParameters parameterValues statements
+-- statementes_ va donde van los statements
+-- substituteParameters solo busca el params, y los order y cambia el cacho de la aridad por un término con la hoja del valor que corresponde
+
+-- después para ver solo ciertas relaciones, podés filtrarlos en los strings, no es tan de la lógica principal
+
+-- después me falta la semántica del binding de los módulos
 
 main = do
     sessionData <- userInput

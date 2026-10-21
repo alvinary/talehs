@@ -6,6 +6,7 @@ module Parser where
 
 import qualified Data.Text as Text 
 import qualified Data.Map as Map
+import qualified Data.Text.IO as TIO
 
 -- The order is important, because substrings are replaced sequentially
 -- The linear order is meant to be compatible with the substring partial order
@@ -57,6 +58,12 @@ readToken t | otherwise = TokenLeaf |> Text.unpack t
 delimitAll :: Text.Text -> Text.Text
 delimitAll text = replaceOrderly allTokens text
 
+removeOthers :: Text.Text -> Text.Text
+removeOthers text = Text.intercalate (Text.pack "\n") |> filter isStatement |> Text.lines |> text
+    where
+        isStatement s = (not |> Text.null s) && (not |> Text.isPrefixOf commentMarker s)
+        commentMarker = Text.pack "--"
+
 replaceOrderly :: [Text.Text] -> Text.Text -> Text.Text
 replaceOrderly [] text = text
 replaceOrderly (t:ts) text = replaceOrderly ts |> Text.replace t (oneSpace +++ t +++ oneSpace) text
@@ -102,11 +109,47 @@ data Token  = TokenLeaf String
             | TokenVee
     deriving Show
 
-parseError :: ([Token], [String]) -> a
-parseError (t : _, expected) = error ("unexpected " ++ show t ++ "; expected one of: " ++ unwords expected)
-parseError ([], expected)    = error ("unexpected end of input; expected one of: " ++ unwords expected)
+showToken :: Token -> String
+showToken (TokenLeaf s) = s
+showToken (TokenComparison s) = s
+showToken (TokenOperation s) = s
+showToken (TokenNot) = "not"
+showToken (TokenArrow) = "->"
+showToken (TokenIff) = "<->"
+showToken (TokenBottom) = "False"
+showToken (TokenDot) = "."
+showToken (TokenComma) = ","
+showToken (TokenOpenBrackets) = "["
+showToken (TokenCloseBrackets) = "]"
+showToken (TokenOpenParenthesis) = "("
+showToken (TokenCloseParenthesis) = ")"
+showToken (TokenSmaller) = "<"
+showToken (TokenGreater) = ">"
+showToken (TokenEquals) = "=="
+showToken (TokenPlus) = "+"
+showToken (TokenTimes) = "*"
+showToken (TokenLet) = "let"
+showToken (TokenConstant) = "const"
+showToken (TokenVariable) = "var"
+showToken (TokenOrder) = "order"
+showToken (TokenParameters) = "params"
+showToken (TokenModule) = "module"
+showToken (TokenCross) = "x"
+showToken (TokenColon) = ":"
+showToken (TokenSeparator) = "|"
+showToken (TokenQuantify) = "|"
+showToken (TokenBegin) = "{"
+showToken (TokenEnd) = "}"
+showToken (TokenVee) = "or"
+showToken (TokenLess) = "<"
+
+parseError :: ([Token], [String]) -> Either ([Token], [String]) a
+parseError = Left
 
 tokenize :: Text.Text -> [Token]
 tokenize text = map readToken |> splitTokens adaptedText
     where
-        adaptedText = delimitAll text
+        adaptedText = delimitAll |> removeOthers text
+
+redo = TIO.readFile
+printo = TIO.putStrLn
