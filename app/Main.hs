@@ -13,6 +13,7 @@ import qualified Data.Text.IO as TIO
 import Control.DeepSeq (NFData, force)
 import qualified Solve
 import qualified Data.Map as Map
+import System.Process (readProcess)
 
 data Session = Session {
     programPath :: String,
@@ -21,11 +22,6 @@ data Session = Session {
     relations :: [String],
     store :: Bool
 }
-
-statements :: String -> [Expression.Statement]
-statements text = case Reader.read (Parser.tokenize $ Text.pack text) of
-    Right sts -> sts
-    Left err    -> error err
 
 readRelations :: String -> [String]
 readRelations text = map Text.unpack $ Text.splitOn comma $ Text.pack text
@@ -89,13 +85,23 @@ userInput = execParser opts
                     <> progDesc "Find finite models for syntactically restricted first order theories, similar to an answer set programming engine or logic programming language."
                     <> header "Tale.hs" )
 
+
+-- statements_ = substituteParameters parameterValues statements
+-- statementes_ va donde van los statements
+-- substituteParameters solo busca el params, y los order y cambia el cacho de la aridad por un término con la hoja del valor que corresponde
+
+-- después para ver solo ciertas relaciones, podés filtrarlos en los strings, no es tan de la lógica principal
+
+-- después me falta la semántica del binding de los módulos
+
 main = do
     sessionData <- userInput
-    surcho <- readFile (sessionPath sessionData)
-    --putStrLn $ stateRepresentation surcho ++ "\n\n" ++ theory surcho
-    putStrLn $ theory surcho
+    statements <- readFile (sessionPath sessionData)
+    --putStrLn $ stateRepresentation surcho ++ "\n\n" ++ theory statements
+    modelsText <- readProcess "python" ["dimacs_map.py"] ((show $ sessionModels sessionData) ++ "\n" ++ theory statements)
+    putStrLn modelsText
         where 
             --stateRepresentation :: String -> String
             --stateRepresentation s = show $ Expression.programState $ map Solu.parse $ map Text.pack $ lines $ s
             theory :: String -> String
-            theory s = List.intercalate "\n" $ map show $ Expression.getGamma $ map Solu.parse $ map Text.pack $ lines $ s
+            theory s = List.intercalate "\n" $ map show (Expression.getGamma $ map Solu.parse $ map Text.pack $ lines $ s)
