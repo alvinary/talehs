@@ -43,20 +43,30 @@ def present(index_, literal):
 
 n = int(input())
 
-for line in sys.stdin:
-    line = line.rstrip("\n")
-    if not line:
-        break
-    #print(line, list(map_line(line)))
-    print("Now mapping ", line)
-    clauses = []
-    for clause in map_line(line):
-        s.add_clause(clause)
-        reverse = reverse_index(index)
-        clauses.append(" v ".join([present(reverse, a) for a in clause]))
-    for c in clauses:
-        print("Mapped it to", c)
-    print()
+debug = False
+
+if debug:
+    for line in sys.stdin:
+        line = line.rstrip("\n")
+        if not line:
+            break
+        #print(line, list(map_line(line)))
+        print("Now mapping ", line)
+        clauses = []
+        for clause in map_line(line):
+            s.add_clause(clause)
+            reverse = reverse_index(index)
+            clauses.append(" v ".join([present(reverse, a) for a in clause]))
+        for c in clauses:
+            print("Mapped it to", c)
+        print()
+else:
+    for line in sys.stdin:
+        line = line.rstrip("\n")
+        if not line:
+            break
+        for clause in map_line(line):
+            s.add_clause(clause)
 
 print()
 print('Models')
