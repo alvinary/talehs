@@ -24,16 +24,22 @@ def map_line(line):
         else:
             for p in rhs.replace("),", ");").split(";"):
                 yield neg + [var(p)]
-    elif ")v" in line:
-        yield [var(p) for p in line.replace(")v", ");").split(";")]
+    elif ")||" in line:
+        yield [var(p) for p in line.replace(")||", ");").split(";")]
     else:
-        for p in line.split("v"):
+        for p in line.split("||"):
             yield [var(p)]
 
 s = Solver(name='glucose3')
 
 def show(index_, literal):
     return index_[abs(literal)]
+
+def present(index_, literal):
+    if literal < 0:
+        return "-" + show(index_, literal)
+    elif literal > 0:
+        return show(index_, literal)
 
 n = int(input())
 
@@ -42,8 +48,16 @@ for line in sys.stdin:
     if not line:
         break
     #print(line, list(map_line(line)))
+    print("Now mapping ", line)
+    clauses = []
     for clause in map_line(line):
         s.add_clause(clause)
+        reverse = reverse_index(index)
+        clauses.append(" v ".join([present(reverse, a) for a in clause]))
+    for c in clauses:
+        print("Mapped it to", c)
+    print()
+
 print()
 print('Models')
 print()

@@ -169,7 +169,7 @@ instance Show Conjunction where
 instance TShow Formula where
     tshow (Assertion conjuncts) = intercalate ", " (map tshow conjuncts)
     tshow (Contradiction conjuncts) = intercalate ", " (map tshow conjuncts) <> " => False"
-    tshow (Disjunction conjuncts) = intercalate " v " (map tshow conjuncts)
+    tshow (Disjunction conjuncts) = intercalate " || " (map tshow conjuncts)
     tshow (Implication hypo conc) = intercalate ", " (map tshow hypo) <> " => " <> intercalate ", " (map tshow conc)
     tshow (Equivalence lhs rhs) = intercalate ", " (map tshow lhs) <> " <=> " <> intercalate ", " (map tshow rhs)
 
