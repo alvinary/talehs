@@ -25,6 +25,7 @@ tokenShapes = [("<=>", TokenIff),
                ("order", TokenOrder),
                ("params", TokenParameters),
                ("module", TokenModule),
+               ("=", TokenEquals),
                ("&", TokenVee),
                ("{", TokenBegin),
                ("}", TokenEnd),
@@ -128,7 +129,7 @@ showToken (TokenOpenParenthesis) = "("
 showToken (TokenCloseParenthesis) = ")"
 showToken (TokenSmaller) = "<"
 showToken (TokenGreater) = ">"
-showToken (TokenEquals) = "=="
+showToken (TokenEquals) = "="
 showToken (TokenPlus) = "+"
 showToken (TokenTimes) = "*"
 showToken (TokenLet) = "let"
