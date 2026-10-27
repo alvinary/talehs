@@ -643,7 +643,7 @@ asSize term state | Dict.member term (parameters state) = Dict.findWithDefault 0
 asSize _ state = error "In order to be converted to a size, a term must be either a sequence of digits or a parameter."
 
 ---------------------------------------------------------------------------------------
--- Encodings and Formulas -------------------------------------------------------------
+-- Helpers for Encodings and Formulas -------------------------------------------------
 ---------------------------------------------------------------------------------------
 
 -- Evaluate all dot terms using the values in 'state'
@@ -822,6 +822,7 @@ getAssignments expression state = assignments expression variableRanges expressi
 ---------------------------------------------------------------------------------------------------------------
 
 -- TODO: ordenar las declaraciones por el orden correcto de evaluación antes de llamar esto
+
 getState :: [Declaration] -> State
 getState [] = emptyState
 getState (d:declarations) = applyDeclaration d (getState declarations)
@@ -831,14 +832,16 @@ getState (d:declarations) = applyDeclaration d (getState declarations)
         isGround_ d_ state = isGround d_ (Set.fromList |> variables state)
 
 -----------------------------------------------------------------------------------------------------------
+-- Encode Functions, Equality and Negation as Theories ----------------------------------------------------
+-----------------------------------------------------------------------------------------------------------
 
 unfoldInstance :: State -> [Formula] -> [Formula]
 unfoldInstance state rules = allFunctionEncodings ++ ruleGroundings ++ unaEncoding ++ negationEncoding
     where
         allFunctionEncodings = encodeAllFunctions state
         ruleGroundings = concat |> map (\x -> grounding x state) rules
-        unaEncoding = []
-        negationEncoding = encodeNegation state rules
+        unaEncoding = encodeUNA state
+        negationEncoding = encodeNegation state (rules ++ unaEncoding)
 
 ----------------------------------------------------------------------------------------------------------------
 
@@ -864,10 +867,19 @@ encodeNegation state rules = concat |> map negationClauses allAtoms
         negationClauses atom = concat |> map groundNegation |> groundAtoms atom
         groundNegation atom = eitherFrom (Positive atom) (Negative atom)
 
---------------------------------------------------------------------------------------
+encodeUNA :: State -> [Formula]
+encodeUNA state = map unaFormulas allPairs
+    where
+        unaFormulas [a, b] | a == b = (Assertion [Mono |> Positive |> Comparison a (Leaf "=") b])
+        unaFormulas [a, b] | a /= b = (Assertion [Mono |> Negative |> Comparison a (Leaf "=") b])
+        unaFormulas other = error |> "Tried to assemble UNA formulas from a list of an unexpected form, " ++ show other
+        allPairs = sequence [allConstants, allConstants]
+        allConstants = removeRepetitions |> concat |> map (\x -> Dict.findWithDefault (defaultError x) x |> members state) (Dict.keys |> members state)
+        defaultError x = error |> "Key " ++ show x ++ "not found in map"
+        removeRepetitions x = x -- TODO, map to a set and back
 
 --------------------------------------------------------------------------------------
--- Map Programs to their Models ------------------------------------------------------
+-- Map Programs to Theories ----------------------------------------------------------
 --------------------------------------------------------------------------------------
 
 getDeclarations :: [Statement] -> [Declaration]
@@ -885,12 +897,7 @@ getRules (_:statements) = getRules statements
 programState :: [Statement] -> State
 programState program = getState |> sortDeclarations |> getDeclarations |> program
 
----------------------------------------------------------------------------------------
--- Evaluate a Program -----------------------------------------------------------------
----------------------------------------------------------------------------------------
-
 -- The semantics of a program / the equivalent propositional theory 
-
 getGamma :: [Statement] -> [Formula]
 getGamma program = unfoldInstance state rules
     where
