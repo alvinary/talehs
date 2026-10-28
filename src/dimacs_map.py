@@ -68,6 +68,9 @@ else:
         for clause in map_line(line):
             s.add_clause(clause)
 
+def must_hide(literal):
+    return "-" in literal or "=" in literal # or "bits[" in literal
+
 print()
 print('Models')
 print()
@@ -75,7 +78,8 @@ reverse = reverse_index(index)
 for i, model in enumerate(s.enum_models()):
     if i >= n:
         break
-    print(", ".join([show(reverse, a) for a in model if a > 0 and "-" not in show(reverse, a) and "bits[" not in show(reverse, a)]))
+    print(", ".join([show(reverse, a) for a in model if a > 0 and not must_hide(show(reverse, a))]))
     print()
+print("Shown ", i + 1, " models")
 
 s.delete()
