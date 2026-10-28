@@ -7,6 +7,7 @@ module Parser where
 import qualified Data.Text as Text 
 import qualified Data.Map as Map
 import qualified Data.Text.IO as TIO
+import qualified Data.Char as Char
 
 -- The order is important, because substrings are replaced sequentially
 -- The linear order is meant to be compatible with the substring partial order
@@ -24,6 +25,7 @@ tokenShapes = [("<=>", TokenIff),
                ("order", TokenOrder),
                ("params", TokenParameters),
                ("module", TokenModule),
+               ("=", TokenEquals),
                ("&", TokenVee),
                ("{", TokenBegin),
                ("}", TokenEnd),
@@ -60,9 +62,11 @@ delimitAll text = replaceOrderly allTokens text
 
 removeOthers :: Text.Text -> Text.Text
 removeOthers text = Text.intercalate (Text.pack "\n") |> filter isStatement |> Text.lines |> text
+
+isStatement s = (not |> Text.null s) && (not |> allWhitespace s) && (not |> Text.isPrefixOf commentMarker s)
     where
-        isStatement s = (not |> Text.null s) && (not |> Text.isPrefixOf commentMarker s)
         commentMarker = Text.pack "--"
+        allWhitespace s = Text.all Char.isSpace s
 
 replaceOrderly :: [Text.Text] -> Text.Text -> Text.Text
 replaceOrderly [] text = text
@@ -125,7 +129,7 @@ showToken (TokenOpenParenthesis) = "("
 showToken (TokenCloseParenthesis) = ")"
 showToken (TokenSmaller) = "<"
 showToken (TokenGreater) = ">"
-showToken (TokenEquals) = "=="
+showToken (TokenEquals) = "="
 showToken (TokenPlus) = "+"
 showToken (TokenTimes) = "*"
 showToken (TokenLet) = "let"
@@ -149,7 +153,7 @@ parseError = Left
 tokenize :: Text.Text -> [Token]
 tokenize text = map readToken |> splitTokens adaptedText
     where
-        adaptedText = delimitAll |> removeOthers text
+        adaptedText = delimitAll text
 
 redo = TIO.readFile
 printo = TIO.putStrLn

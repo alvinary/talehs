@@ -14,15 +14,15 @@ import qualified Data.Set as Set
 
 parse :: Text.Text -> Statement
 parse text =
-  case Reader.read tokens of
-    Right (x:[]) -> x
-    Right (x:xs) -> error "Unexpected return type while parsing"
-    Left (rest, expected) -> errorText (rest, expected, take (length tokens - length rest) tokens, tokens)
-  where
-    tokens = Parser.tokenize text
+    case Reader.read tokens of
+        Right (x:[]) -> x
+        Right (x:xs) -> error "Unexpected number of resulting statements while parsing"
+        Left (rest, expected) -> errorText (rest, expected, take (length tokens - length rest) tokens, tokens)
+    where
+        tokens = Parser.tokenize text
 
 errorText (t : ts, expected, remaining, tokens) = error ("unexpected " ++ show t ++ ";\nexpected one of: " ++ unwords expected ++ ";\ntokens remaining in current line: \n" ++ (unwords $ map showToken remaining) ++ "\n In line: " ++  (unwords $ map showToken tokens))
-errorText ([], expected, remaining, tokens)     = error ("unexpected end of input; expected one of: " ++ unwords expected ++ ";\n Runned out of input while reading " ++ (unwords $ map showToken tokens))
+errorText ([], expected, remaining, tokens)     = error ("unexpected end of input; expected one of: " ++ unwords expected ++ ";\nRan out of input while reading " ++ (unwords $ map showToken tokens))
 
 
 extract :: Statement -> Declaration
@@ -68,8 +68,8 @@ funs = Expression.functions $ getState $ map parseDeclaration simpleDeclarations
 simpleDeclarations = [abcConstants, xyVars]
 instanceDeclarations = [abcConstants, colors, functionG, xyVars, colorVars]
 instanceRules = map Text.pack ["r(x, y) -> not r (y, x)", "r (x, x) -> False", "r(x, y), c(x, k), c(y, k) -> False"]
-simpleRules = map Text.pack ["r(x, y), r(y, z) -> r(x, z)", "r(x, y), r(y, x) -> False"] -- "m(x) -> w : A | { p ( x , w ) }", "m (a[1].next.next)"]
-simpleFormulas = (map parseRule simpleRules) -- ++ [(Expression.Assertion [(Expression.Mono (Expression.Positive (Expression.Relation (Expression.Leaf "m") [(Expression.Attribute (Expression.Attribute (Expression.Index (Leaf "a") [(Leaf "1")]) (Expression.Leaf "next")) (Expression.Leaf "next"))])))])]
+simpleRules = map Text.pack ["r(x, y), r(y, z) -> r(x, z)", "r(x, y), r(y, x) -> False"]
+simpleFormulas = (map parseRule simpleRules)
 
 sampleState = Expression.getState $ map parseDeclaration simpleDeclarations
 instanceState = Expression.getState $ map parseDeclaration simpleDeclarations

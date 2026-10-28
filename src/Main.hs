@@ -97,11 +97,14 @@ userInput = execParser opts
 main = do
     sessionData <- userInput
     statements <- readFile (sessionPath sessionData)
+    --putStrLn (show $ stateRepresentation statements)
     --putStrLn $ stateRepresentation surcho ++ "\n\n" ++ theory statements
     modelsText <- readProcess "python" ["dimacs_map.py"] ((show $ sessionModels sessionData) ++ "\n" ++ theory statements)
     putStrLn modelsText
+    -- putStrLn (theory statements)
+    --putStrLn (show $ stateRepresentation statements)
         where 
-            --stateRepresentation :: String -> String
-            --stateRepresentation s = show $ Expression.programState $ map Solu.parse $ map Text.pack $ lines $ s
+            stateRepresentation :: String -> String
+            stateRepresentation s = show $ Expression.programState $ map Solu.parse $ map Text.pack $ lines $ s
             theory :: String -> String
-            theory s = List.intercalate "\n" $ map show (Expression.getGamma $ map Solu.parse $ map Text.pack $ lines $ s)
+            theory s = List.intercalate "\n" $ map show (Expression.getGamma $ map Solu.parse $ Text.lines $ Parser.removeOthers $ Text.pack s)
