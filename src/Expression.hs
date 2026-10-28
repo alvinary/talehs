@@ -671,69 +671,82 @@ uniqueNameAssumption terms = concat |> map unaFormula |> sequence [terms, terms]
         areEqual x y = Assertion [Mono |> Positive |> equalityAtom x y]
         areNotEqual x y = Assertion [Mono |> Negative |> equalityAtom x y]
 
--- Encode a function (a relation that's injective and surjective)
-encodeFunction :: Term -> [[Term]] -> [Term] -> [Formula]
-encodeFunction functionName domain image = encodeValues ++ encodeBounds 
-    where
-        encodeValues = concat |> (map (\args -> encodeDomainElement functionName args image) domain `using` parListChunk 10000 rdeepseq)
-        encodeBounds = forbidOffBounds functionName firstOffBounds lastOffBounds domain imageSize -- TODO: los nombres están swappeados
-        imageSize = length image
-        firstOffBounds = imageSize                    -- TODO: Oboe
-        lastOffBounds = 2 ^ (logTwoCeiling imageSize) -- TODO: Oboe. eso, eso +1, o eso -1?
-        
-encodeDomainElement :: Term -> [Term] -> [Term] -> [Formula]
-encodeDomainElement functionName arguments image = encodeBits ++ encodeAssignment
-    where
-        encodeBits = bitConstraints functionName arguments imageSize --- Each element must be associated with a bit vector...
-        encodeAssignment = concat |> map (\(index, value) -> valueFormulas functionName arguments value index imageSize) |> enumerate image  -- Todo: 0 indexed or 1 indexed? 
-        imageSize = length image
+-- Encode a function
 
-forbidIndexBits :: Term -> [Term] -> Int -> Int -> Formula
-forbidIndexBits f elem index max = Contradiction |> elementBits f elem index max
+-- The width is the log two size of the *image*
+-- Each element in the domain is assigned a value of zero or one for each bit
+-- No element in the domain is assigned values that correspond to an index out of range
 
--- Given a function, an element, its index, and the index of the last element in the
--- domain, compute the list of conjucts [bits[f, 1] (a,  b_1), ..., bits[f, i] (a,  b_i), ..., bits[f, n] (a, b_n)]
--- TODO: calculas newxTwoPower ochenta veces, pasalo de parámetro culeah
-elementBits :: Term -> [Term] -> Int -> Int -> [Conjunction]
-elementBits f elem n max = map bitAtom |> zip elementBits [0..w]
+encodeFunctionalRelation :: Term -> [[Term]] -> [Term] -> [Formula]
+encodeFunctionalRelation function domain image = vectors ++ values ++ bounds
     where
-        bitAtom (bit, index) = Mono |> Positive |> Relation (fBitsPredicate index) (elem ++ [bit])
-        fBitsPredicate i = Index bitsTerm [f, indexTerm i]
-        elementArguments = elem ++ elementBits
-        bitsTerm = Leaf "bits"
-        indexTerm i = Leaf |> T.pack |> show i
-        elementBits = padding ++ (map (\x -> Leaf |> T.pack |> show x) |> binaryDigits n)
-        w = logTwoCeiling max
-        paddingSize = w - (length |> binaryDigits n)
-        padding = map (\x -> Leaf "0") [0..paddingSize]
+        bounds = encodeBounds function image domain width   -- No element in the domain is assigned a bit vector that, interpreted as an integer, is off bounds
+        vectors = encodeVectors function image domain width -- Every element in the domain is assigned a bit vector whose width suffices to 'cover' all elements in the image
+        values = encodeValues function image domain width   -- Suppose a : Domain and b_i image. bits [f, j] (a) = vec(i) ==> f(a, b_i)
+        width = logTwoCeiling |> length image
 
--- valueFormulas functionName DomainSorts ImageSort elementIndex ImageSize
--- TODO: Should this be 'just' the conjunct, or also a formulas for 'wrong bit -> not this value'?
---       Like, for all i, bit [f, i] (arts, b.bits[i].flip) -> not f (args, b).
-valueFormulas :: Term -> [Term] -> Term -> Int -> Int -> [Formula]
-valueFormulas f as b i m = [Implication bitsConjunct valueConjunct, Implication valueConjunct bitsConjunct] ++ atomOrNot
+--------------------
+
+encodeBounds :: Term -> [Term] -> [[Term]] -> Int -> [Formula]
+encodeBounds function image domain width = concat |> map encodeElementBounds domain
     where
-        valueAtom = Relation f |> as ++ [b]
-        valueConjunct = [Mono |> Positive |> valueAtom]
-        bitsConjunct = (elementBits f as i m)
-        atomOrNot = eitherFrom (Negative |> valueAtom) (Positive |> valueAtom)
+        encodeElementBounds arguments = map (excludeBits arguments) excludedRange
+        excludedRange = [(length domain) .. (2^width)] -- from length domain to 2^width because indexing is zero-based
+        excludeBits arguments index = Contradiction |> map (\x -> Mono |> Positive x) (vectorAtoms function arguments index width)
 
--- `bitConstraints` ensures each tuple in the domain has either zero or one as value for each bit
--- These are necessary just once per domain element, not per `(domain element, image element)` pair 
-bitConstraints :: Term -> [Term] -> Int -> [Formula]
-bitConstraints f args m = concat |> map bitFormulas bitIndices
+--------------------
+
+encodeVectors :: Term -> [Term] -> [[Term]] -> Int -> [Formula]
+encodeVectors function image domain width = concat |> map encodeElementVectors domain
     where
-        bitFormulas index = eitherFrom (bitPredicate index valueZero) (bitPredicate index valueOne)
-        bitIndices = map (\i -> Leaf |> T.pack |> show i) [1..logM] -- TODO: oboe
-        indexTerm index = Index (Leaf "bits") [f, index]
-        valueZero = [(Leaf "0")]
-        valueOne = [(Leaf "1")]
-        bitPredicate bitIndex bitValue = Positive |> Relation (indexTerm bitIndex) (args ++ bitValue)
-        logM = logTwoCeiling m
+        encodeElementVectors arguments = concat |> map (componentXor arguments) [0..width - 1]
+        componentXor arguments i = eitherFrom (Positive |> isZero arguments i) (Positive |> isOne arguments i)
+        isOne arguments i = bitComponentAtom function i arguments 1
+        isZero arguments i = bitComponentAtom function i arguments 0
 
--- `from` is the first forbidden value, `to` is the last
-forbidOffBounds :: Term -> Int -> Int -> [[Term]] -> Int -> [Formula]
-forbidOffBounds f from to domain imageSize = [forbidIndexBits f elem index imageSize | elem <- domain, index <- [from..to]]
+-------------------
+
+encodeValues :: Term -> [Term] -> [[Term]] -> Int -> [Formula]
+encodeValues function image domain width = concat |> map encodeElementRange domain
+    where
+        encodeElementRange arguments = concat |> map (encodeElementValue arguments width) |> zip [0..length image - 1] image
+        encodeElementValue arguments width (index, value) = [Implication (vectorLiterals_ arguments index) (valueLiterals_ function arguments value), Implication (valueLiterals_ function arguments value) (vectorLiterals_ arguments index)]
+        valueLiterals_ function arguments value = [Mono |> Positive |> elementValueAtom function arguments value]
+        vectorLiterals_ arguments index = map (\x -> Mono |> Positive x) (vectorAtoms function arguments index width)
+
+---------------------------------------------------------------------------------
+
+-- The `position`-th bit of the `function` vector of `arguments` has `value`
+bitComponentAtom :: Term -> Int -> [Term] -> Int -> Atom
+bitComponentAtom function position arguments value = Relation bits_f_i (args_ value)
+    where
+        bits_ = (Leaf "bits")
+        f_i_ = [function, Leaf |> T.pack |> show position]
+        bits_f_i = (Index bits_ f_i_)
+        value_ 0 = (Leaf "zero")
+        value_ 1 = (Leaf "one")
+        value_ n = error ""
+        args_ b = arguments ++ [value_ b]
+
+-- The atom `function(element, value)`
+elementValueAtom :: Term -> [Term] -> Term -> Atom
+elementValueAtom function element value = Relation function (element ++ [value])
+
+-- 0 based, least significant digits to the right
+indexVector :: Int -> Int -> [Int]
+indexVector index width = padding ++ contentBits
+    where
+        contentBits = binaryDigits index
+        padding = replicate (width - length contentBits) 0
+
+vectorAtoms :: Term -> [Term] -> Int -> Int -> [Atom]
+vectorAtoms function arguments index width = map bitComponent |> zip [0..width - 1] (indexVector index width)
+    where
+        bitComponent (i, val) = Relation (Index (Leaf "bits") [function, indexTerm i]) (arguments ++ [valueTerm val])
+        valueTerm 0 = Leaf "zero"
+        valueTerm 1 = Leaf "one"
+        valueTerm i = error |> "Tried to convert an integer greater than one, " ++ show i ++ "into a bit-vector component"
+        indexTerm i = Leaf |> T.pack |> show i -- Mhhh
 
 -- Auxiliary functions for indexing 'value bits'
 enumerate :: [a] -> [(Int, a)]
@@ -851,7 +864,7 @@ encodeAllFunctions state = concat |> (map encodeF functionNames `using` parListC
         functionDomains = domains state 
         functionNames = functions state
         functionImages = images state
-        encodeF f = encodeFunction f (getDomain f) (getImage f)
+        encodeF f = encodeFunctionalRelation f (getDomain f) (getImage f)
         sortMembers s = Dict.findWithDefault [] s (members state)
         getImage f = sortMembers |> Dict.findWithDefault (Leaf "") f (images state)
         getDomain f = sequence |> map sortMembers |> Dict.findWithDefault [] f (domains state)
