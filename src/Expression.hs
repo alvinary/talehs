@@ -691,7 +691,7 @@ encodeBounds :: Term -> [Term] -> [[Term]] -> Int -> [Formula]
 encodeBounds function image domain width = concat |> map encodeElementBounds domain
     where
         encodeElementBounds arguments = map (excludeBits arguments) excludedRange
-        excludedRange = [(length domain) .. (2^width)] -- from length domain to 2^width because indexing is zero-based
+        excludedRange = [(length image) .. (2^width)-1] -- from length image to 2^width because indexing is zero-based
         excludeBits arguments index = Contradiction |> map (\x -> Mono |> Positive x) (vectorAtoms function arguments index width)
 
 --------------------
