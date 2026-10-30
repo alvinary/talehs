@@ -1,0 +1,26 @@
+order v 7 : vertex
+
+let parent : vertex -> vertex
+let left : vertex -> vertex
+let right : vertex -> vertex
+
+var x, y : vertex
+
+-- Ordering constraints
+---- There is an arbitrary total ordering over vertices
+not before (x, x)
+before (x, x.next)
+before (x, y) -> before (x, y.next)
+---- No vertex has a directed edge pointing to an edge 'before' it
+edge (x, y), before (y, x) -> False
+
+-- Relationship between the edge and parent relations
+---- The converse of the edge relation is the parent relation
+not root (y), parent (y, x) -> edge (x, y)
+edge (x, y), not parent (y, x) -> False
+
+-- The root is unique
+root (v[1])
+root (x) -> not root (x.next)
+not root (x) -> not root (x.next)
+not root (x), parent (x, x) -> False
