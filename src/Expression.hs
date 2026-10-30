@@ -721,7 +721,7 @@ bitComponentAtom :: Term -> Int -> [Term] -> Int -> Atom
 bitComponentAtom function position arguments value = Relation bits_f_i (args_ value)
     where
         bits_ = (Leaf "bits")
-        f_i_ = [function, Leaf |> T.pack |> show position]
+        f_i_ = [function, Leaf |> T.pack |> "i" ++ show (position + 1)] --Mhhh
         bits_f_i = (Index bits_ f_i_)
         value_ 0 = (Leaf "zero")
         value_ 1 = (Leaf "one")
@@ -746,7 +746,7 @@ vectorAtoms function arguments index width = map bitComponent |> zip [0..width -
         valueTerm 0 = Leaf "zero"
         valueTerm 1 = Leaf "one"
         valueTerm i = error |> "Tried to convert an integer greater than one, " ++ show i ++ "into a bit-vector component"
-        indexTerm i = Leaf |> T.pack |> show i -- Mhhh
+        indexTerm i = Leaf |> T.pack |> "i" ++ show (i + 1) -- Mhhh
 
 -- Auxiliary functions for indexing 'value bits'
 enumerate :: [a] -> [(Int, a)]
