@@ -25,6 +25,7 @@ tokenShapes = [("<=>", TokenIff),
                ("order", TokenOrder),
                ("params", TokenParameters),
                ("module", TokenModule),
+               ("!", TokenNequals),
                ("=", TokenEquals),
                ("&", TokenVee),
                ("{", TokenBegin),
@@ -95,6 +96,7 @@ data Token  = TokenLeaf String
             | TokenSmaller
             | TokenGreater
             | TokenEquals
+            | TokenNequals
             | TokenPlus
             | TokenTimes
             | TokenLet
@@ -129,6 +131,7 @@ showToken (TokenOpenParenthesis) = "("
 showToken (TokenCloseParenthesis) = ")"
 showToken (TokenSmaller) = "<"
 showToken (TokenGreater) = ">"
+showToken (TokenNequals) = "!"
 showToken (TokenEquals) = "="
 showToken (TokenPlus) = "+"
 showToken (TokenTimes) = "*"
