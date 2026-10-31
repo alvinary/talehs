@@ -12,7 +12,7 @@ import Parser
 %error        { Parser.parseError }       -- Name of the function to call if an error occurs during parsing
 %errorhandlertype explist
 
-%nonassoc '<' '>' '=' '->' '<->' '|' '{' '}'
+%nonassoc '<' '>' '=' '->' '<->' '|' '{' '}' '!='
 %right '&'
 %right ','
 %right '+' '-'
@@ -25,6 +25,7 @@ import Parser
 leaf     { Parser.TokenLeaf ($$) }        
 not      { Parser.TokenNot }
 arrow    { Parser.TokenArrow }
+'!'      { Parser.TokenNequals }
 iff      { Parser.TokenIff }
 '&'      { Parser.TokenVee }
 bottom   { Parser.TokenBottom }
@@ -75,6 +76,7 @@ Rule :  Conj arrow bottom                      { Expression.Contradiction     $1
 
 Comparison : '<'                               { Leaf (T.pack "<") }
            | '>'                               { Leaf (T.pack ">") }
+           | '!'                               { Leaf (T.pack "!=") }
            | '='                               { Leaf (T.pack "=") }
 
 Disj : Literal '&' Disj                         { (Expression.Mono $1):$3 }
