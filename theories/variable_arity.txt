@@ -1,0 +1,88 @@
+order v 7 : vertex
+order n 4 : index
+const i1, i2, i3 : bitIndex
+const one, zero : bit
+
+let parent : vertex -> vertex
+let nextSibling : vertex -> vertex
+let prevSibling : vertex -> vertex
+let firstChild : vertex -> vertex
+let lastChild : vertex -> vertex
+let arity : vertex -> index
+let childIndex : vertex -> index
+
+var x, y : vertex
+var j, k : index
+var b : bit
+var l : bitIndex
+
+
+-- 
+not before (x, x)
+before (x, x.next)
+before (x, y) -> before (x, y.next)
+
+not before (j, j)
+before (j, j.next)
+before (j, k) -> before (j, k.next)
+
+---- No vertex has a directed edge pointing to an edge 'before' it
+edge (x, y), before (y, x) -> False
+
+-- The converse of the edge relation is the parent relation
+not root (y), parent (y, x) -> edge (x, y)
+edge (x, y), not parent (y, x) -> False
+
+-- The root is unique
+root (v[1])
+root (x) -> not root (x.next)
+not root (x) -> not root (x.next)
+not root (x), parent (x, x) -> False
+
+-- Root: the only self-parent; unique; minimal in the order (follows from the axioms below)
+parent (x, x) -> root (x)
+root (x) -> parent (x, x)
+root (x), root (y) -> x = y
+parent (x, y), x ! y -> before (y, x)
+
+-- Root conventions (the root has no siblings, its index is n[1])
+root (x) -> nextSibling (x, x)
+root (x) -> prevSibling (x, x)
+root (x) -> childIndex (x, n[1])
+
+-- Leaves are their own first and last child, and nobody's parent
+leaf (x) -> firstChild (x, x)
+firstChild (x, x) -> leaf (x)
+leaf (x) -> lastChild (x, x)
+lastChild (x, x) -> leaf (x)
+parent (y, x), x ! y, leaf (x) -> False
+
+-- Constraints on the first and last children of a node
+firstChild (x, y), x ! y -> parent (y, x)
+firstChild (x, y), x ! y -> prevSibling (y, y)
+firstChild (x, y), x ! y -> childIndex (y, n[1])
+lastChild (x, y), x ! y -> parent (y, x)
+lastChild (x, y), x ! y -> nextSibling (y, y)
+
+-- Converses: only the first/last siblings act like 'sentinels'
+prevSibling (y, y), not root (y), parent (y, x) -> firstChild (x, y)
+nextSibling (y, y), not root (y), parent (y, x) -> lastChild (x, y)
+
+-- nextSibling and prevSibling are inverses, except for the last and first siblings
+nextSibling (x, y), x ! y -> prevSibling (y, x)
+prevSibling (y, x), x ! y -> nextSibling (x, y)
+
+-- Siblings share a parent
+nextSibling (x, y), x ! y, bits [parent, l] (x, b) -> bits [parent, l] (y, b)
+
+-- A vertex's next sibling has the next index
+-- Since n[4].next introduces a n[|index|+1] that ruins everything, we exclude it
+nextSibling (x, y), x ! y, childIndex (x, k), k ! n[4] -> childIndex (y, k.next)
+nextSibling (x, y), x ! y, childIndex (x, n[4]) -> False
+
+-- Arity constraints
+-- Again, we use x ! y to exclude vertices that are not nodes
+lastChild (x, y), x ! y, childIndex (y, k) -> arity (x, k)
+
+-- Some symmetry breaking
+nextSibling (x, y), x ! y -> before (x, y)
