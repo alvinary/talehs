@@ -13,21 +13,35 @@ def reverse_index(index_):
         reverse_index[index_[k]] = k
     return reverse_index
 
+def split_top(s, sep=","):
+    parts, depth, cur = [], 0, []
+    for ch in s:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        if ch == sep and depth == 0:
+            parts.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    parts.append("".join(cur))
+    return parts
+
 def map_line(line):
-    line = line.replace('"', "")
-    line = line.replace(" ", "")
+    line = line.replace('"', "").replace(" ", "")
     if "=>" in line:
         lhs, rhs = line.split("=>")
-        neg = [-var(p) for p in lhs.replace("),", ");").split(";")]
-        if "False" in rhs:
+        neg = [-var(p) for p in split_top(lhs)]
+        if rhs == "False":
             yield neg
         else:
-            for p in rhs.replace("),", ");").split(";"):
+            for p in split_top(rhs):
                 yield neg + [var(p)]
-    elif ")||" in line:
-        yield [var(p) for p in line.replace(")||", ");").split(";")]
+    elif "||" in line:
+        yield [var(p) for p in line.split("||")]
     else:
-        for p in line.split("||"):
+        for p in split_top(line):
             yield [var(p)]
 
 s = Solver(name='glucose3')
@@ -69,17 +83,19 @@ else:
             s.add_clause(clause)
 
 def must_hide(literal):
-    return "-" in literal or "=" in literal # or "bits[" in literal
+    return "-" in literal or "=" in literal or "bits[" in literal
 
 print()
 print('Models')
 print()
 reverse = reverse_index(index)
+c = 0
 for i, model in enumerate(s.enum_models()):
     if i >= n:
         break
+    c += 1
     print(", ".join([show(reverse, a) for a in model if a > 0 and not must_hide(show(reverse, a))]))
     print()
-print("Shown ", i + 1, " models")
+print("Shown ", c, " models")
 
 s.delete()
