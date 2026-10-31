@@ -732,6 +732,9 @@ bitComponentAtom function position arguments value = Relation bits_f_i (args_ va
 elementValueAtom :: Term -> [Term] -> Term -> Atom
 elementValueAtom function element value = Relation function (element ++ [value])
 
+bitIndexTerm :: Int -> Term
+bitIndexTerm n = Index (Leaf |> T.pack "i") [(Leaf |> T.pack |> show n)]
+
 -- 0 based, least significant digits to the right
 indexVector :: Int -> Int -> [Int]
 indexVector index width = padding ++ contentBits
@@ -881,11 +884,13 @@ encodeNegation state rules = concat |> map negationClauses allAtoms
         groundNegation atom = eitherFrom (Positive atom) (Negative atom)
 
 encodeUNA :: State -> [Formula]
-encodeUNA state = map unaFormulas allPairs
+encodeUNA state = concat |> map unaFormulas allPairs
     where
-        unaFormulas [a, b] | a == b = (Assertion [Mono |> Positive |> Comparison a (Leaf "=") b])
-        unaFormulas [a, b] | a /= b = (Assertion [Mono |> Negative |> Comparison a (Leaf "=") b])
+        unaFormulas [a, b] | a == b = [(Assertion [Mono |> deq a b])] ++ eitherFrom (neq a b) (deq a b)
+        unaFormulas [a, b] | a /= b = [(Assertion [Mono |> neq a b])] ++ eitherFrom (neq a b) (deq a b)
         unaFormulas other = error |> "Tried to assemble UNA formulas from a list of an unexpected form, " ++ show other
+        deq a b = Positive |> Comparison a (Leaf "=") b
+        neq a b = Positive |> Comparison a (Leaf "!=") b
         allPairs = sequence [allConstants, allConstants]
         allConstants = removeRepetitions |> concat |> map (\x -> Dict.findWithDefault (defaultError x) x |> members state) (Dict.keys |> members state)
         defaultError x = error |> "Key " ++ show x ++ "not found in map"
