@@ -1,0 +1,235 @@
+order v 7 : vertex
+order n 4 : index
+const i1, i2, i3 : bitIndex
+const one, zero : bit
+
+const seq, alt, neg, token : type
+
+-- assume |position| = |tokens|
+
+let parent : vertex -> vertex
+let nextSibling : vertex -> vertex
+let prevSibling : vertex -> vertex
+let firstChild : vertex -> vertex
+let lastChild : vertex -> vertex
+let arity : vertex -> index
+let childIndex : vertex -> index
+
+let expression : vertex -> rule
+let label : vertex -> symbol
+
+let leftLabel : rule -> symbol
+let rightLabel : rule -> symbol
+let ruleType : rule -> type
+
+let left : vertex -> vertex
+let right : vertex -> vertex
+
+let begin : vertex -> position
+let end : vertex -> position
+
+let expectLeftLabel : vertex -> symbol
+let expectRightLabel : vertex -> symbol
+
+let tokenSymbol : position -> symbol
+
+let expectBeginRight : vertex -> position
+let mustBegin : vertex -> position
+
+var x, y : vertex
+var j, k : index
+var b : bit
+var l : bitIndex
+var a : symbol
+var r, s : rule
+var t, w : type
+var p : position
+
+-- == VARIABLE ARITY TREES ============================================================================
+
+not before (x, x)
+before (x, x.next)
+before (x, y) -> before (x, y.next)
+
+not before (j, j)
+before (j, j.next)
+before (j, k) -> before (j, k.next)
+
+---- No vertex has a directed edge pointing to an edge 'before' it
+edge (x, y), before (y, x) -> False
+
+-- The converse of the edge relation is the parent relation
+not root (y), parent (y, x) -> edge (x, y)
+edge (x, y), not parent (y, x) -> False
+
+-- The root is unique
+root (v[1])
+root (x) -> not root (x.next)
+not root (x) -> not root (x.next)
+not root (x), parent (x, x) -> False
+
+-- Root: the only self-parent; unique; minimal in the order (follows from the axioms below)
+parent (x, x) -> root (x)
+root (x) -> parent (x, x)
+root (x), root (y) -> x = y
+parent (x, y), x ! y -> before (y, x)
+
+-- Root conventions (the root has no siblings, its index is n[1])
+root (x) -> nextSibling (x, x)
+root (x) -> prevSibling (x, x)
+root (x) -> childIndex (x, n[1])
+
+-- Leaves are their own first and last child, and nobody's parent
+leaf (x) -> firstChild (x, x)
+firstChild (x, x) -> leaf (x)
+leaf (x) -> lastChild (x, x)
+lastChild (x, x) -> leaf (x)
+parent (y, x), x ! y, leaf (x) -> False
+
+-- Constraints on the first and last children of a node
+firstChild (x, y), x ! y -> parent (y, x)
+firstChild (x, y), x ! y -> prevSibling (y, y)
+firstChild (x, y), x ! y -> childIndex (y, n[1])
+lastChild (x, y), x ! y -> parent (y, x)
+lastChild (x, y), x ! y -> nextSibling (y, y)
+
+-- Converses: only the first/last siblings act like 'sentinels'
+prevSibling (y, y), not root (y), parent (y, x) -> firstChild (x, y)
+nextSibling (y, y), not root (y), parent (y, x) -> lastChild (x, y)
+
+-- nextSibling and prevSibling are inverses, except for the last and first siblings
+nextSibling (x, y), x ! y -> prevSibling (y, x)
+prevSibling (y, x), x ! y -> nextSibling (x, y)
+
+-- Siblings share a parent
+nextSibling (x, y), x ! y, bits [parent, l] (x, b) -> bits [parent, l] (y, b)
+
+-- A vertex's next sibling has the next index
+-- Since n[4].next introduces a n[|index|+1] that ruins everything, we exclude it
+nextSibling (x, y), x ! y, childIndex (x, k), k ! n[4] -> childIndex (y, k.next)
+nextSibling (x, y), x ! y, childIndex (x, n[4]) -> False
+
+-- Arity constraints
+-- Again, we use x ! y to exclude vertices that are not nodes
+lastChild (x, y), x ! y, childIndex (y, k) -> arity (x, k)
+
+-- Some symmetry breaking
+nextSibling (x, y), x ! y -> before (x, y)
+
+-- == PEG PARSING =====================================================================================
+
+-- General constraints for vertices and rules
+
+fail (x), match (x) -> False
+fail (x) & match (x)
+
+left (x, y), fail (y) -> leftFailure (x)
+left (x, y), match (y) -> leftMatch (x)
+right (x, y), match (y), x ! y -> rightMatch (x)
+right (x, y), x ! y, fail (y) -> rightFailure (x)
+
+not leaf (x), left (x, y) -> x ! y
+not leaf (x), right (x, y), not blockRight (x) -> x ! y
+
+left (x, y), x ! y, not parent (y, x) -> False
+right (x, y), x ! y, not parent (y, x) -> False
+
+leftMatch (x), leftFailure (x) -> False
+rightMatch (x), rightFailure (x) -> False
+
+left (x, y), x ! y -> firstChild (x, y)
+right (x, y), x ! y -> lastChild (x, y)
+parent (y, x), x ! y, not left (x, y), not right (x, y) -> False
+
+expression (x, r), leftLabel (r, a) -> expectLeftLabel (x, a)
+expression (x, r), rightLabel (r, a) -> expectRightLabel (x, a)
+
+expression (x, r), ruleType (r, t) -> t (x)
+expression (x, r), ruleType (r, t), w (x), w ! t -> False
+
+left (x, y), right (x, y), x ! y -> False
+
+-- Find a more concise alternative later
+seq (x), right (x, y) -> seqRight (y)
+leaf (x) -> not seqRight (x)
+not seq (x), right (x, y) -> not seqRight (y)
+left (x, y) -> not seqRight (y)
+
+seqRight (x), mustBegin (x, p) -> begin (x, p.next)
+
+-- Rules for sequential composition
+
+seq (x) -> not leaf (x)
+
+seq (x), match (x), left (x, y) -> match (y)
+seq (x), match (x), right (x, y) -> match (y)
+
+seq (x), leftFailure (x) -> fail (x)
+seq (x), leftFailure (x) -> blockRight (x)
+seq (x), leftMatch (x) -> not blockRight (x)
+seq (x), leftMatch (x), rightMatch (x) -> match (x)
+seq (x), leftMatch (x), rightFailure (x) -> fail (x)
+
+-- distinguish between x.end and x.endBuffer 
+seq (x), left (x, y), bits [begin, l] (y, b) -> bits [begin, l] (x, b)
+seq (x), right (x, y),  x ! y, bits [end, l] (y, b) -> bits [end, l] (x, b)
+seq (x), left (x, y), bits [end, l] (y, b) -> bits [expectBeginRight, l] (x, b)
+seq (x), right (x, y), x ! y, bits [expectBeginRight, l] (x, b) -> bits [mustBegin, l] (y, b)
+
+seq (x), match(x), expectLeftLabel (x, a), left (x, y) -> label (y, a)
+seq (x), match(x), expectRightLabel (x, a), right (x, y), x ! y -> label (y, a)
+
+seq (x), fail (x), leftFailure (x), expectLeftLabel (x, a), left (x, y), label (y, a) -> False
+seq (x), fail (x), rightFailure (x), expectRightLabel (x, a), right (x, y), label (y, a) -> False
+
+-- Ordered alternative rules
+
+alt (x) -> not leaf (x)
+
+alt (x), leftMatch (x) -> match (x)
+alt (x), leftMatch (x) -> blockRight (x)
+alt (x), leftFailure (x) -> not blockRight (x)
+alt (x), leftFailure (x), rightMatch (x) -> match (x)
+alt (x), leftFailure (x), rightFailure (x) -> fail (x)
+
+alt (x), left (x, y), bits [begin, l] (y, b) -> bits [begin, l] (x, b)
+alt (x), right (x, y), bits [begin, l] (y, b) -> bits [begin, l] (x, b)
+
+-- Important inconsistency. Where does a failed alternative end? It cannot end at two positions
+alt (x), match (x), leftMatch (x), left (x, y), bits [end, l] (y, b) -> bits [end, l] (x, b)
+alt (x), match(x), rightMatch (x), right (x, y), x ! y, bits [end, l] (y, b) -> bits [end, l] (x, b)
+
+alt (x), match(x), expectLeftLabel (x, a), left (x, y) -> label (y, a)
+alt (x), match(x), expectRightLabel (x, a), right (x, y), x ! y -> label (y, a)
+
+alt (x), fail (x), leftFailure (x), expectLeftLabel (x, a), left (x, y), label (y, a) -> False
+alt (x), fail (x), rightFailure (x), expectRightLabel (x, a), right (x, y), label (y, a) -> False
+
+-- Negation rules
+
+neg (x) -> not leaf (x)
+
+neg (x) -> blockRight (x)
+neg (x), leftFailure (x) -> match (x)
+neg (x), leftMatch (x) -> fail (x)
+
+neg (x), left (x, y), bits [begin, l] (y, b) -> bits [begin, l] (x, b)
+neg (x), left (x, y), bits [end, l] (y, b) -> bits [end, l] (x, b)
+
+-- Token rules
+
+token (x) -> leaf (x)
+token (x), match (x), position (x, p), tokenSymbol (p, a) -> label (x, a)
+token (x), fail (x), position (x, p), tokenSymbol (p, a), label (x, a) -> False
+
+token (x), bits [position, l] (x, b) -> bits [begin, l] (x, b)
+token (x), bits [position, l] (x, b) -> bits [end, l] (x, b)
+
+-- Semantics for blockRight
+
+blockRight (x) -> right (x, x)
+
+-- Symmetry breaking
+
+leaf (x) -> not blockRight (x)
+leaf (x) -> arity (x, n[1])
