@@ -150,10 +150,10 @@ expression (x, r), ruleType (r, t), w (x), w ! t -> False
 left (x, y), right (x, y), x ! y -> False
 
 -- Find a more concise alternative later
-seq (x), right (x, y) -> seqRight (y)
+seq (x), right (x, y), x ! y -> seqRight (y)
 leaf (x) -> not seqRight (x)
-not seq (x), right (x, y) -> not seqRight (y)
-left (x, y) -> not seqRight (y)
+not seq (x), right (x, y), x ! y -> not seqRight (y)
+left (x, y), x ! y -> not seqRight (y)
 
 seqRight (x), mustBegin (x, p) -> begin (x, p.next)
 
