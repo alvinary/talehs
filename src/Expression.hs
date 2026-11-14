@@ -85,14 +85,6 @@ split (k:ks) val map = split ks val newMap
     where
         newMap = Dict.insert k val map
 
--- Show a term as a string
-flatten :: Term -> T.Text
-flatten t = tshow t
-
--- Map a list of terms to a list of strings
-massFlatten :: [Term] -> [T.Text]
-massFlatten ts = map flatten ts
-
 -- TODO: parser must reject empty terms. Ensure it does, ensure that's known.
 emptyTerm :: Term 
 emptyTerm = (Leaf "")
@@ -102,7 +94,7 @@ emptyTerm = (Leaf "")
 -------------------------------------------------------------------------------------------
 
 -- Used for substitutions
-type Binding = Dict.Map T.Text Term
+type Binding = Dict.Map Term Term
 
 -------------------------------------------------------------------------------------------
 -- Types of expressions (terms and formulas) ----------------------------------------------
@@ -181,10 +173,10 @@ class TShow a where
 
 class Ord a => Expression a where
     replace :: a -> Binding -> a
-    collect :: a -> Set T.Text -> Set T.Text
-    leaves :: a -> Set T.Text
+    collect :: a -> Set Term -> Set Term
+    leaves :: a -> Set Term
     atoms :: a -> Set Atom
-    isGround :: a -> Set T.Text -> Bool
+    isGround :: a -> Set Term -> Bool
     allMono :: a -> Bool
     bindAny :: a -> Dict.Map Term [Term] -> Binding -> a
     mapLeaves :: a -> (Term -> Term) -> a
@@ -203,15 +195,15 @@ instance Expression Term where
 
     -- mapLeaves should be the general case of replace, where f is replacing with bindings
 
-    replace term binding | Dict.member (tshow term) binding = Dict.findWithDefault (Leaf "error") (tshow term) binding
+    replace term binding | Dict.member term binding = Dict.findWithDefault (Leaf "error") term binding
 
-    replace (Leaf name) binding = Dict.findWithDefault (Leaf name) name binding
+    replace (Leaf name) binding = Dict.findWithDefault (Leaf name) (Leaf name) binding
     
     replace (Attribute t1 t2) binding = (Attribute t1_ t2_)
         where
             t1_ = replace t1 binding
             t2_ = replace t2 binding
-    
+    --- ###
     replace (Index t ts) binding = (Index t_ ts_)
         where
             t_ = replace t binding
@@ -223,9 +215,9 @@ instance Expression Term where
             op_ = replace op binding 
             t2_ = replace t2 binding
 
-    collect term vars | (tshow term) `member` vars = Set.singleton (tshow term)
+    collect term vars | term `member` vars = Set.singleton term
 
-    collect (Leaf name) vars | name `member` vars = Set.singleton name
+    collect (Leaf name) vars | (Leaf name) `member` vars = Set.singleton (Leaf name)
     
     collect (Leaf name) vars | otherwise = Set.empty
 
@@ -244,7 +236,7 @@ instance Expression Term where
             opVars = (collect op vars)
             t2Vars = (collect t2 vars)
 
-    leaves (Leaf name) = Set.singleton name
+    leaves (Leaf name) = Set.singleton (Leaf name)
     
     leaves (Attribute t1 t2) = t1Vars `union` t2Vars
         where
@@ -523,8 +515,8 @@ instance TShow Statement where
 
 data State = State {
     members	   :: Dict.Map Term [Term],      -- Map the name of a sort to a collection with its members
-	variables  :: [T.Text],                  -- Keep track of all names that are intended to be interpreted as variables
-	ranges     :: Dict.Map T.Text Term,      -- Map a variable name (a string) to the name of the sort (a term) it ranges over 
+	variables  :: [Term],                  -- Keep track of all names that are intended to be interpreted as variables
+	ranges     :: Dict.Map Term Term,      -- Map a variable name (a string) to the name of the sort (a term) it ranges over 
 	functions  :: [Term],                    -- Keep track of the terms that are intended to be interpreted as functions
 	images     :: Dict.Map Term Term,        -- Map the name of a function to the names of the sorts its image belongs to
     domains    :: Dict.Map Term [Term],      -- Map the name of a function to the names of the sorts whose product contains the functions' domain
@@ -560,9 +552,9 @@ declarationDependencies _ = []
 -- Intended for use with ground declarations
 stateUpdate :: Declaration -> State -> State
 stateUpdate (Constant ts t) state = state { members = fuse t ts (members state) }
-stateUpdate (Variable ts t) state = state { ranges = split (massFlatten ts) t (ranges state), variables = (variables state) ++ newVariables }
+stateUpdate (Variable ts t) state = state { ranges = split ts t (ranges state), variables = (variables state) ++ newVariables }
     where
-        newVariables = massFlatten ts -- en realidad, es cada nueva variable que creaste, con las sustituciones pertinentes
+        newVariables = ts -- en realidad, es cada nueva variable que creaste, con las sustituciones pertinentes
 stateUpdate (Order prefix size sort) state = addTotalOrder prefix size sort state
 stateUpdate (Function f domain image) state = addFunction f domain image state
 stateUpdate (Assignment (Attribute t f) s) state = state { values = Dict.insert (t_, f) s_ (values state) }
@@ -785,14 +777,14 @@ grounding expression state | otherwise = concat |> map (\x -> grounding x state)
         stateVariables = Set.fromList |> variables state
 
 -- Do the 'partial' grounding without having to check every time if the result is ground. TODO: is this really more efficient?
-unpackAndGround :: (Expression a, NFData a) => a -> State -> Set T.Text -> [a]
+unpackAndGround :: (Expression a, NFData a) => a -> State -> Set Term -> [a]
 unpackAndGround expression state stateVars = groundingStep expression allRanges expressionVariables (members state)
     where
         expressionVariables = Set.toList |> collect expression stateVars
         allRanges = Dict.fromList |> map (\v -> (v, getVar v)) expressionVariables
         getVar = retrieve (ranges state) (members state)
 
-groundingStep :: (Expression a, NFData a) => a -> Dict.Map T.Text [Term] -> [T.Text] -> Dict.Map Term [Term] -> [a]
+groundingStep :: (Expression a, NFData a) => a -> Dict.Map Term [Term] -> [Term] -> Dict.Map Term [Term] -> [a]
 groundingStep expression ranges variables members = map bind allAssignments `using` parListChunk 1000 rdeepseq
     where
         bind binding = bindAny expression fixedMembers binding
@@ -800,17 +792,17 @@ groundingStep expression ranges variables members = map bind allAssignments `usi
         !fixedRanges = force ranges
         !fixedMembers = force members
 
-bindPoly :: Conjunction -> Dict.Map Term [Term] -> Dict.Map T.Text Term -> Conjunction
+bindPoly :: Conjunction -> Dict.Map Term [Term] -> Dict.Map Term Term -> Conjunction
 bindPoly (Poly head body) members globalAssignment = Poly [] |> (concat |> map makeMono localAssignments)
     where
         makeMono localAssignment = map (\x -> replace x localAssignment) body
         localAssignments = assignments (Poly head body) localRanges localVariables
-        localVariables = map (\(x, y) -> tshow x) head -- Only works for 'simple' term variables . there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
-        localRanges = Dict.fromList |> map (\(x, y) -> (tshow x, Dict.findWithDefault (error "Empty sort") y members)) head
+        localVariables = map (\(x, y) -> x) head -- Only works for 'simple' term variables . there you should somehow substract variables in the global scope? -- or have some sort of error message when the head is already a variable used outside
+        localRanges = Dict.fromList |> map (\(x, y) -> (x, Dict.findWithDefault (error "Empty sort") y members)) head
 bindPoly any _ globalAssignment = replace any globalAssignment
 
 -- Obtain a map from variable names to their ranges
-retrieve :: Dict.Map T.Text Term -> Dict.Map Term [Term] -> (T.Text -> [Term])
+retrieve :: Dict.Map Term Term -> Dict.Map Term [Term] -> (Term -> [Term])
 retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefault emptyTerm var ranges_) members_)
 
 --------------------------------------------------------------------------------------------------------------
@@ -818,14 +810,14 @@ retrieve ranges_ members_ = \var -> (Dict.findWithDefault [] (Dict.findWithDefau
 -- Functions for obtaining valid assignments of values to variables
 
 -- Check if `expression` can be substituted with _ there (i.e. if it is not used in the function body)
-assignments :: (Expression a, NFData a) => a -> Dict.Map T.Text [Term] -> [T.Text] -> [Dict.Map T.Text Term]
+assignments :: (Expression a, NFData a) => a -> Dict.Map Term [Term] -> [Term] -> [Dict.Map Term Term]
 assignments expression ranges variables = map makeAssignment product
     where
         product = sequence |> map (\var -> retrieve_ var) |> variables
         makeAssignment xs = Dict.fromList |> zip variables xs
         retrieve_ var = Dict.findWithDefault [] var ranges
 
-getAssignments :: (Expression a, NFData a) => a -> State -> [Dict.Map T.Text Term]
+getAssignments :: (Expression a, NFData a) => a -> State -> [Dict.Map Term Term]
 getAssignments expression state = assignments expression variableRanges expressionVariables
     where
         expressionVariables = Set.toList |> collect expression |> Set.fromList stateVariables
@@ -839,6 +831,7 @@ getAssignments expression state = assignments expression variableRanges expressi
 
 -- TODO: ordenar las declaraciones por el orden correcto de evaluación antes de llamar esto
 
+{--
 getState :: [Declaration] -> State
 getState [] = emptyState
 getState (d:declarations) = applyDeclaration d (getState declarations)
@@ -846,6 +839,10 @@ getState (d:declarations) = applyDeclaration d (getState declarations)
         applyDeclaration d_ state | isGround_ d_ state = stateUpdate d_ state
         applyDeclaration d_ state | otherwise = groundAndUpdate d_ state
         isGround_ d_ state = isGround d_ (Set.fromList |> variables state)
+--}
+
+getState :: [Declaration] -> State
+getState declarations = applyDeclarations |> reverse declarations
 
 -----------------------------------------------------------------------------------------------------------
 -- Encode Functions, Equality and Negation as Theories ----------------------------------------------------
