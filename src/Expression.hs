@@ -181,7 +181,7 @@ class Ord a => Expression a where
     bindAny :: a -> Dict.Map Term [Term] -> Binding -> a
     mapLeaves :: a -> (Term -> Term) -> a
     bindAny expr _ binding = replace expr binding
-    collect expr vars = (leaves expr) `intersection` vars
+    --collect expr vars = (leaves expr) `intersection` vars -- this doesn't work now that variables are not leaves, but general terms
     isGround expr vars = Set.null (collect expr vars)
 
 instance Expression Term where
@@ -281,6 +281,10 @@ instance Expression Atom where
             comp_ = replace comp binding
     leaves (Comparison left comp right) = leaves left `union` leaves right `union` leaves comp
     leaves (Relation pred args) = leaves pred `union` (bigUnion |> map (\a -> leaves a) args)
+    
+    collect  (Comparison left comp right) vars = collect left vars `union` collect right vars `union` collect comp vars
+    collect (Relation pred args) vars = collect pred vars `union` (bigUnion |> map (\a -> collect a vars) args)
+    
     atoms at = Set.singleton at
 
     allMono atom = True
@@ -300,6 +304,10 @@ instance Expression Literal where
             at_ = replace at binding
     leaves (Positive at) = leaves at
     leaves (Negative at) = leaves at
+
+    collect (Positive at) vars = collect at vars
+    collect (Negative at) vars = collect at vars
+
     atoms (Positive at) = Set.singleton at
     atoms (Negative at) = Set.singleton at
 
@@ -324,10 +332,13 @@ instance Expression Conjunction where
             literalLeaves = map leaves literals
     atoms (Mono literal) = atoms literal
     atoms (Poly ranges literals) = bigUnion |> map atoms literals
+
+    collect (Mono literal) vars = collect literal vars
     collect (Poly ranges literals) vars = Set.difference (bigUnion bodyVariables) (bigUnion rangeVariables)
         where
             rangeVariables = map (\(x, y) -> Set.union (collect x vars) (collect y vars)) ranges
             bodyVariables = map (\x -> collect x vars) literals
+    
     allMono (Mono _) = True
     allMono (Poly _ _) = False
 
@@ -403,7 +414,13 @@ instance Expression Formula where
     leaves (Contradiction conjuncts) = bigUnion |> map leaves conjuncts
     leaves (Implication hypo conc) = (bigUnion |> map leaves hypo) `union` (bigUnion |> map leaves conc)
     leaves (Equivalence lhs rhs) = (bigUnion |> map leaves lhs) `union` (bigUnion |> map leaves rhs)
-    
+
+    collect (Assertion conjuncts) vars = bigUnion |> map (\x ->  collect x vars) conjuncts
+    collect (Disjunction conjuncts) vars = bigUnion |> map (\x ->  collect x vars) conjuncts
+    collect (Contradiction conjuncts) vars = bigUnion |> map (\x ->  collect x vars) conjuncts
+    collect (Implication hypo conc) vars = (bigUnion |> map (\x ->  collect x vars) hypo) `union` (bigUnion |> map (\x ->  collect x vars) conc)
+    collect (Equivalence lhs rhs) vars = (bigUnion |> map (\x ->  collect x vars) lhs) `union` (bigUnion |> map (\x ->  collect x vars) rhs)
+        
     atoms (Assertion conjuncts) = bigUnion |> map atoms conjuncts
     atoms (Disjunction conjuncts) = bigUnion |> map atoms conjuncts
     atoms (Contradiction conjuncts) = bigUnion |> map atoms conjuncts
@@ -433,7 +450,7 @@ instance TShow Declaration where
     tshow (Constant ts t) = "const " <> ttshow ts <> " : " <>  tshow t
     tshow (Order p s a) = "order " <> tshow p <> " " <> tshow s <> " " <> tshow a
     tshow (Function f ds im) = "let " <> tshow f <> " : " <> ttshow ds <> " -> " <> tshow im
-    tshow  (Variable ts t) = "var " <> ttshow ts <> " : " <>  tshow t
+    tshow (Variable ts t) = "var " <> ttshow ts <> " : " <>  tshow t
     tshow (Assignment t f) = "let " <> tshow t <> " = " <> tshow f
     tshow (Parameters ts) = "params " <> ttshow ts
     tshow (Module t bs) = "module M { a1 : b1 }"
@@ -495,6 +512,14 @@ instance Expression Declaration where
     leaves (Assignment t1 t2) = leaves t1 `union` leaves t2
     leaves (Module t ps) = leaves t `union` bigUnion (map (\(x, y) -> leaves x `union` leaves y) ps)
     leaves (Parameters ts) = bigUnion (map leaves ts)
+
+    collect (Constant ts t) vars = collect t vars `union` (bigUnion |> map (\x -> collect x vars) ts)
+    collect (Variable ts t) vars = collect t vars `union` (bigUnion |> map (\x -> collect x vars) ts)
+    collect (Order t1 t2 t3) vars = collect t1 vars `union` collect t2 vars `union` collect t3 vars
+    collect (Function f dom img) vars = collect f vars `union` collect img vars `union` (bigUnion |> map (\x -> collect x vars) dom)
+    collect (Assignment t1 t2) vars = collect t1 vars `union` collect t2 vars
+    collect (Module t ps) vars = collect t vars `union` bigUnion (map (\(x, y) -> collect x vars `union` collect y vars) ps)
+    collect (Parameters ts) vars = (bigUnion |> map (\x -> collect x vars) ts)
 
     atoms declaration = Set.empty
 
