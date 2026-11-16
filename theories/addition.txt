@@ -7,7 +7,6 @@ let zero.opposite = one
 let one.opposite = zero
 
 var x, y : Naturals
-var n, m : Numbers
 var i : Index
 var b : Bits
 
