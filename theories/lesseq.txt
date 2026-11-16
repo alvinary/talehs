@@ -1,0 +1,26 @@
+order nat 10 : Naturals
+order ind 16 : Index
+
+const zero, one : Bits
+
+let zero.opposite = one
+let one.opposite = zero
+
+var x, y : Naturals
+var i : Index
+
+bit (x, ind[1], zero) -> leq (x, y, ind[1])
+bit (y, ind[1], one) -> leq (x, y, ind[1])
+bit (x, ind[1], one), bit (y, ind[1], zero) -> not leq (x, y, ind[1])
+
+i ! ind[16], bit (x, i.next, zero), bit (y, i.next, one) -> leq (x, y, i.next)
+i ! ind[16], bit (x, i.next, one), bit (y, i.next, zero) -> not leq (x, y, i.next)
+i ! ind[16], bit (x, i.next, zero), leq (x, y, i) -> leq (x, y, i.next)
+i ! ind[16], bit (x, i.next, one), not leq (x, y, i) -> not leq (x, y, i.next)
+i ! ind[16], bit (y, i.next, one), leq (x, y, i) -> leq (x, y, i.next)
+i ! ind[16], bit (y, i.next, zero), not leq (x, y, i) -> not leq (x, y, i.next)
+
+leq (x, y, ind[16]) -> lesseq (x, y)
+not leq (x, y, ind[16]) -> not lesseq (x, y)
+not lesseq (y, x) -> less (x, y)
+lesseq (y, x) -> not less (x, y)
